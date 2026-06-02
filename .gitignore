@@ -1,0 +1,12 @@
+# Virtual environment
+.venv/
+
+# Decoder outputs (large binary/db files)
+data/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# OS
+.DS_Store
