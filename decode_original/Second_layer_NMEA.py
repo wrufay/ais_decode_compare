@@ -16,7 +16,7 @@ Publish date: May 01, 2020
 """
 #################################################################################
 import logging
-from First_layer_NMEA import *
+from decode_original.First_layer_NMEA import *
 
 def decod_data(data):
     # decode AIS payload and return a dictionary with key:value
