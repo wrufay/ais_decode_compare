@@ -6,7 +6,14 @@
   https://publications.gc.ca/collections/collection_2023/mpo-dfo/Fs97-18-360-eng.pdf - Key notes: Creates .nc files as output
 
 - _decode_aisdb.py_ = new decoding script using AISdb package, notably using the decode_msgs function, documentation here: https://aisviz.cs.dal.ca/AISdb/api/aisdb.database.decoder.html
-  - Key notes: Writes to a SQLite database as output
+    - Key notes: Writes to a SQLite database as output
+
+
+  | Decoder | Script | Output format |
+|---|---|---|
+| Original | `decode_original/Process_AIS_Serial.py` | NetCDF (`.nc`) — one Dynamic + one Static file per input file |
+| AISDB | `decode_aisdb.py` | SQLite (`.db`) — one database per source |
+
 
 ### Objective
 
@@ -17,6 +24,7 @@ Compare the outputs of both scripts. Primarily:
 
 Additionally, observe differences in speed and efficiency of both scripts.
 
+
 ### Data sources
 
 Destination of source data on CSRF Linux computer:
@@ -24,10 +32,8 @@ _/home/shared/ccg_ais_claudio/ais_comp_
 
 After running both scripts on the two raw data sources (**streaming** and **NM4** directories) producing a total of four different outputs, we compare the results against pre-decoded data in the **csv** directory.
 
+
 ### Ongoing observations - June 1st, 2026
 
 - The original script finished decoding faster than the AISdb script, perhaps because of the use of parallel programming. It took 115 minutes to run on the .nm4 in the NM4 directory, producing 288 Dynamic + 288 Static .nc files.
 
-### Comparing the output
-
-We have written a script, _compare.py[compare.py]_ to process and visualize the output. (WIP)
