@@ -185,8 +185,8 @@ Write `compare.py` at the repo root. It reads all four decoder outputs plus the 
 |---|---|
 | `original_nm4` | Glob `data/original/nm4/Dynamic_*.nc`, combine `mmsi`, `date_num`, `longitude`, `latitude` across all files using `netCDF4` |
 | `original_streaming` | Read `data/original/streaming/Dynamic_CCG_AIS_UTC_Log_2025-12-30.nc` |
-| `aisdb_nm4` | Query `data/aisdb/decode_nm4.db` — table is `ais_202512_dynamic` (aisdb names tables `ais_YYYYMM_dynamic`); extract `mmsi`, `time`, `lon`, `lat` |
-| `aisdb_streaming` | Query `data/aisdb/decode_streaming.db` — same table naming convention |
+| `aisdb_nm4` | Query `data/decode_nm4.db` — table is `ais_202512_dynamic` (aisdb names tables `ais_YYYYMM_dynamic`); extract `mmsi`, `time`, `lon`, `lat` |
+| `aisdb_streaming` | Query `data/decode_streaming.db` — same table naming convention |
 | `reference_csv` | Unzip and read all `csv/*.csv.zip`; filter on `reception_timestamp` (parse as datetime); columns include `mmsi`, `latitude`, `longitude` |
 
 ### Outline of compare.py
@@ -314,9 +314,8 @@ ais_decode_compare/
     │   ├── nm4_raw/        ← 288 extracted .csv files (intermediate)
     │   ├── nm4/            ← 288 × Dynamic_*.nc + Static_*.nc
     │   └── streaming/      ← Dynamic_*.nc + Static_*.nc
-    ├── aisdb/
-    │   ├── decode_nm4.db
-    │   └── decode_streaming.db
+    ├── decode_nm4.db
+    ├── decode_streaming.db
     ├── comparison_table.csv   ← rows per source × window
     └── plots/
         ├── routes_00h-03h.png  ← 00:00–03:00 UTC
