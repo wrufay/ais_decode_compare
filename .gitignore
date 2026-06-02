@@ -1,8 +1,18 @@
 # Virtual environment
 .venv/
 
-# Decoder outputs (large binary/db files)
-data/
+# Large decoder outputs — not committed
+data/original/
+data/decode_nm4.db
+data/decode_nm4.db-journal
+data/decode_streaming.db
+data/decode_streaming.db-journal
+
+# Keep results
+!data/comparison_table.csv
+!data/comparison_table_backup.csv
+!data/plots/
+!data/validation/
 
 # Python cache
 __pycache__/

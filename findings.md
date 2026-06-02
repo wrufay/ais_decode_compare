@@ -26,6 +26,22 @@ The original decoder finished the NM4 job in ~2 hours; the aisdb decoder took 3.
 
 The actual NMEA parsing speed is likely comparable between the two since aisdb uses compiled Rust under the hood.
 
-## 4. Accuracy comparison pending
+## 4. Accuracy comparison results
 
-The above findings are pre-comparison observations. The actual accuracy comparison — unique MMSI counts, position agreement, and route coverage — will be produced by `compare.py` once all decode jobs finish.
+Comparison run on two 3-hour UTC windows (00:00–03:00 and 21:00–24:00) of 2025-12-30 NM4 data against the pre-decoded reference CSVs.
+
+| Source | 00h–03h vessels | 21h–24h vessels |
+|---|---|---|
+| original decoder (NM4) | 169,121 | 163,513 |
+| reference CSV | 168,299 | 162,944 |
+| aisdb (NM4) | 156,524 | 152,832 |
+| original decoder (streaming) | 3,244 | 3,369 |
+| aisdb (streaming) | 2,906 | 3,033 |
+
+**Key finding:** The original decoder matches the reference CSV within ~0.5% on unique MMSI counts. aisdb is consistently ~7% lower than both.
+
+**Why aisdb is lower:** aisdb deduplicates records using a primary key on `(mmsi, time, longitude, latitude, sog, cog, source)`. When the same vessel broadcast is received by multiple stations with slightly different timestamps, the original decoder counts each reception separately while aisdb may merge or drop some. This likely accounts for the ~7% gap.
+
+**Streaming vs NM4:** Both streaming sources show only ~3,000 unique vessels vs ~160,000+ from NM4, confirming that streaming is a heavily filtered/aggregated subset of the data, not an equivalent representation of the full day.
+
+Full results: `data/comparison_table.csv` | Plots: `data/plots/`

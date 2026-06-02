@@ -1,0 +1,63 @@
+======================================================================
+Loading sources (one at a time to limit memory usage)
+======================================================================
+
+  Loading original_nm4...
+    input files:    288  (24437.42 MB)
+    raw records:    148,288,715
+    valid records:  35,741,119  (yield: 24.1%)
+    unique MMSI:    202,668
+    load speed:     12,471,717 records/s  (11.89s)
+    avg msgs/vessel:176.4
+
+  Loading original_streaming...
+    input files:    1  (4016.87 MB)
+    raw records:    24,386,393
+    valid records:  5,520,668  (yield: 22.64%)
+    unique MMSI:    3,595
+    load speed:     11,395,511 records/s  (2.14s)
+    avg msgs/vessel:1535.7
+
+  Loading aisdb_nm4...
+    input files:    1  (18244.09 MB)
+    raw records:    120,671,757
+    valid records:  30,004,585  (yield: 24.86%)
+    unique MMSI:    185,897
+    load speed:     430,325 records/s  (280.42s)
+    avg msgs/vessel:161.4
+
+  Loading aisdb_streaming...
+    input files:    1  (1127.94 MB)
+    raw records:    7,302,955
+    valid records:  1,842,694  (yield: 25.23%)
+    unique MMSI:    3,251
+    load speed:     544,184 records/s  (13.42s)
+    avg msgs/vessel:566.8
+
+  Loading reference_csv...
+    input files:    288  (3814.22 MB)
+    raw records:    141,444,174
+    valid records:  32,974,548  (yield: 23.31%)
+    unique MMSI:    201,518
+    load speed:     1,313,316 records/s  (107.7s)
+    avg msgs/vessel:163.6
+
+======================================================================
+Windowed comparison
+======================================================================
+
+ window             source  records  unique_mmsi  avg_msgs_vessel  lat_min  lat_max   lon_min  lon_max  load_s  input_size_mb  full_day_records  yield_pct
+00h-03h       original_nm4 17681754       169121            104.6 -87.9991  90.0000 -179.9996 180.0000   11.89       24437.42          35741119      24.10
+21h-24h       original_nm4 18059365       163513            110.4 -88.8533  88.5925 -179.9998 180.0000   11.89       24437.42          35741119      24.10
+00h-03h original_streaming  2931650         3244            903.7 -56.1127  74.7228 -135.6939 121.2318    2.14        4016.87           5520668      22.64
+21h-24h original_streaming  2589018         3369            768.5 -56.1155  77.6381 -179.1417  55.6498    2.14        4016.87           5520668      22.64
+00h-03h          aisdb_nm4 14806799       156524             94.6 -87.9991  90.0000 -179.9996 180.0000  280.42       18244.09          30004585      24.86
+21h-24h          aisdb_nm4 15197786       152832             99.4 -88.8533  88.5925 -179.9998 180.0000  280.42       18244.09          30004585      24.86
+00h-03h    aisdb_streaming   968529         2906            333.3   0.0000  55.5212 -135.6939  55.6498   13.42        1127.94           1842694      25.23
+21h-24h    aisdb_streaming   874165         3033            288.2   0.0000  77.6381 -134.1557  55.6498   13.42        1127.94           1842694      25.23
+00h-03h      reference_csv 15988490       168299             95.0 -87.9991  90.0000 -179.9996 180.0000  107.70        3814.22          32974548      23.31
+21h-24h      reference_csv 16986058       162944            104.2 -88.7502  88.5925 -179.9999 180.0000  107.70        3814.22          32974548      23.31
+
+Saved: data/comparison_table.csv
+Saved: data/plots/routes_00h-03h.png
+Saved: data/plots/routes_21h-24h.png

@@ -83,7 +83,22 @@ def load_original_nc(pattern: str) -> tuple[pd.DataFrame, dict]:
             lon  = np.array(ds.variables["longitude"][:], dtype=float)
             ds.close()
             raw_total += len(mmsi)
-            chunks.append(pd.DataFrame({"mmsi": mmsi, "ts": ts, "lat": lat, "lon": lon}))
+            # Keep only records inside one of the two time windows
+            in_window = np.zeros(len(ts), dtype=bool)
+            for w0, w1 in WINDOWS.values():
+                in_window |= (ts >= w0) & (ts < w1)
+            mask = (
+                in_window &
+                (mmsi != -9999) &
+                ~np.isnan(lat) & ~np.isnan(lon) &
+                (lat >= -90) & (lat <= 90) &
+                (lon >= -180) & (lon <= 180)
+            )
+            if mask.any():
+                chunks.append(pd.DataFrame({
+                    "mmsi": mmsi[mask], "ts": ts[mask],
+                    "lat": lat[mask],   "lon": lon[mask],
+                }))
         except Exception as e:
             print(f"  [warn] could not read {path}: {e}")
 
@@ -92,12 +107,7 @@ def load_original_nc(pattern: str) -> tuple[pd.DataFrame, dict]:
                      "valid_records": 0, "yield_pct": 0})
         return pd.DataFrame(columns=["mmsi", "ts", "lat", "lon"]), meta
 
-    df = pd.concat(chunks, ignore_index=True)
-    valid = df[
-        (df["mmsi"] != -9999) &
-        df["lat"].notna() & df["lon"].notna() &
-        df["lat"].between(-90, 90) & df["lon"].between(-180, 180)
-    ].copy()
+    valid = pd.concat(chunks, ignore_index=True)
 
     elapsed = round(time.perf_counter() - t0, 2)
     meta.update({
@@ -138,20 +148,24 @@ def load_aisdb(db_path: str) -> tuple[pd.DataFrame, dict]:
     frames = []
     raw_total = 0
     for tbl in dyn_tables:
-        total = con.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
-        raw_total += total
+        raw_total += con.execute(f"SELECT COUNT(*) FROM {tbl}").fetchone()[0]
+        # Build OR clause for each window — only load the two 3-hour slices
+        win_clauses = " OR ".join(
+            f"(time >= {t0} AND time < {t1})" for t0, t1 in WINDOWS.values()
+        )
         df = pd.read_sql_query(
-            f"SELECT mmsi, time AS ts, latitude AS lat, longitude AS lon FROM {tbl}",
+            f"""SELECT mmsi, time AS ts, latitude AS lat, longitude AS lon
+                FROM {tbl}
+                WHERE ({win_clauses})
+                  AND latitude BETWEEN -90 AND 90
+                  AND longitude BETWEEN -180 AND 180""",
             con,
         )
         frames.append(df)
     con.close()
 
-    df = pd.concat(frames, ignore_index=True)
-    valid = df[
-        df["lat"].notna() & df["lon"].notna() &
-        df["lat"].between(-90, 90) & df["lon"].between(-180, 180)
-    ].copy()
+    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["mmsi", "ts", "lat", "lon"])
+    valid = df.copy()
 
     elapsed = round(time.perf_counter() - t0, 2)
     meta.update({
@@ -178,7 +192,10 @@ def load_reference_csv(csv_dir: str) -> tuple[pd.DataFrame, dict]:
         meta.update({"load_s": 0, "raw_records": 0, "valid_records": 0, "yield_pct": 0})
         return pd.DataFrame(columns=["mmsi", "ts", "lat", "lon"]), meta
 
+    # Stream one zip at a time and filter to time windows before accumulating
+    # to avoid loading all 288 zips (~24GB) into memory at once.
     chunks = []
+    raw_total = 0
     for zip_path in zips:
         with zipfile.ZipFile(zip_path) as zf:
             for name in zf.namelist():
@@ -187,22 +204,23 @@ def load_reference_csv(csv_dir: str) -> tuple[pd.DataFrame, dict]:
                         f,
                         usecols=["mmsi", "latitude", "longitude", "reception_timestamp"],
                     )
+                raw_total += len(df)
+                # Parse naive UTC datetime string → epoch seconds (pandas 3.x safe)
+                df["ts"] = (
+                    (pd.to_datetime(df["reception_timestamp"]) - pd.Timestamp("1970-01-01"))
+                    // pd.Timedelta("1s")
+                )
+                df = df.rename(columns={"latitude": "lat", "longitude": "lon"})
+                df = df[["mmsi", "ts", "lat", "lon"]]
+                # Keep only records inside one of the two time windows
+                in_window = pd.Series(False, index=df.index)
+                for w0, w1 in WINDOWS.values():
+                    in_window |= (df["ts"] >= w0) & (df["ts"] < w1)
+                df = df[in_window & df["lat"].between(-90, 90) & df["lon"].between(-180, 180)]
+                if len(df):
                     chunks.append(df)
 
-    df = pd.concat(chunks, ignore_index=True)
-    raw_total = len(df)
-
-    # reception_timestamp is a UTC datetime string — convert to Unix epoch.
-    # Do NOT use ais_seconds: that is the AIS payload second-of-minute (0–59).
-    df["ts"] = (
-        pd.to_datetime(df["reception_timestamp"], utc=True).astype("int64") // 10**9
-    )
-    df = df.rename(columns={"latitude": "lat", "longitude": "lon"})
-    df = df[["mmsi", "ts", "lat", "lon"]]
-    valid = df[
-        df["lat"].notna() & df["lon"].notna() &
-        df["lat"].between(-90, 90) & df["lon"].between(-180, 180)
-    ].copy()
+    valid = pd.concat(chunks, ignore_index=True) if chunks else pd.DataFrame(columns=["mmsi", "ts", "lat", "lon"])
 
     elapsed = round(time.perf_counter() - t0, 2)
     meta.update({
@@ -229,7 +247,7 @@ def apply_window(df: pd.DataFrame, t_start: int, t_end: int) -> pd.DataFrame:
 
 def main():
     print("=" * 70)
-    print("Loading sources...")
+    print("Loading sources (one at a time to limit memory usage)")
     print("=" * 70)
 
     loaders = {
@@ -240,13 +258,13 @@ def main():
         "reference_csv":      (load_reference_csv, str(REF_CSV_DIR)),
     }
 
-    sources = {}
-    source_meta = {}
+    all_rows   = []   # comparison table rows accumulated across sources
+    plot_data  = {win: {} for win in WINDOWS}  # {window: {src: (lons, lats, n_vessels)}}
+
     for name, (fn, arg) in loaders.items():
         print(f"\n  Loading {name}...")
         df, meta = fn(arg)
-        sources[name] = df
-        source_meta[name] = meta
+
         print(f"    input files:    {meta['input_files']}  ({meta['input_size_mb']} MB)")
         print(f"    raw records:    {meta['raw_records']:,}")
         print(f"    valid records:  {meta['valid_records']:,}  (yield: {meta['yield_pct']}%)")
@@ -254,56 +272,61 @@ def main():
         if meta.get("load_rate"):
             print(f"    load speed:     {meta['load_rate']:,} records/s  ({meta['load_s']}s)")
         if len(df):
-            avg = len(df) / df["mmsi"].nunique()
-            print(f"    avg msgs/vessel:{avg:.1f}")
+            print(f"    avg msgs/vessel:{len(df) / max(df['mmsi'].nunique(), 1):.1f}")
+
+        # Compute per-window stats and save plot data while df is in memory
+        for win_name, (w0, w1) in WINDOWS.items():
+            subset = apply_window(df, w0, w1)
+            n = len(subset)
+            u = subset["mmsi"].nunique()
+            all_rows.append({
+                "window":           win_name,
+                "source":           name,
+                "records":          n,
+                "unique_mmsi":      u,
+                "avg_msgs_vessel":  round(n / u, 1) if u else None,
+                "lat_min":          round(float(subset["lat"].min()), 4) if n else None,
+                "lat_max":          round(float(subset["lat"].max()), 4) if n else None,
+                "lon_min":          round(float(subset["lon"].min()), 4) if n else None,
+                "lon_max":          round(float(subset["lon"].max()), 4) if n else None,
+                "load_s":           meta["load_s"],
+                "input_size_mb":    meta["input_size_mb"],
+                "full_day_records": meta["valid_records"],
+                "yield_pct":        meta["yield_pct"],
+            })
+            # Store only the arrays needed for plotting (much smaller than full df)
+            plot_data[win_name][name] = (
+                subset["lon"].to_numpy(),
+                subset["lat"].to_numpy(),
+                u,
+                n,
+            )
+
+        # Explicitly free memory before loading the next source
+        del df
+        import gc; gc.collect()
 
     # --- Comparison table -------------------------------------------------
     print("\n" + "=" * 70)
     print("Windowed comparison")
     print("=" * 70)
-
-    rows = []
-    for win_name, (t0, t1) in WINDOWS.items():
-        for src_name, df in sources.items():
-            subset = apply_window(df, t0, t1)
-            n = len(subset)
-            u = subset["mmsi"].nunique()
-            rows.append({
-                "window":           win_name,
-                "source":           src_name,
-                "records":          n,
-                "unique_mmsi":      u,
-                "avg_msgs_vessel":  round(n / u, 1) if u else None,
-                "lat_min":          round(subset["lat"].min(), 4) if n else None,
-                "lat_max":          round(subset["lat"].max(), 4) if n else None,
-                "lon_min":          round(subset["lon"].min(), 4) if n else None,
-                "lon_max":          round(subset["lon"].max(), 4) if n else None,
-                "load_s":           source_meta[src_name]["load_s"],
-                "input_size_mb":    source_meta[src_name]["input_size_mb"],
-                "full_day_records": source_meta[src_name]["valid_records"],
-                "yield_pct":        source_meta[src_name]["yield_pct"],
-            })
-
-    table = pd.DataFrame(rows)
+    table = pd.DataFrame(all_rows)
     print("\n" + table.to_string(index=False))
     out_csv = DATA_DIR / "comparison_table.csv"
     table.to_csv(out_csv, index=False)
     print(f"\nSaved: {out_csv}")
 
     # --- Route plots -------------------------------------------------------
-    for win_name, (t0, t1) in WINDOWS.items():
-        n_src = len(sources)
+    src_names = list(loaders.keys())
+    for win_name in WINDOWS:
+        n_src = len(src_names)
         fig, axes = plt.subplots(1, n_src, figsize=(5 * n_src, 5), constrained_layout=True)
         fig.suptitle(f"Vessel positions — {win_name} UTC  (2025-12-30)", fontsize=13)
 
-        for ax, (src_name, df) in zip(axes, sources.items()):
-            subset = apply_window(df, t0, t1)
-            ax.scatter(subset["lon"], subset["lat"], s=0.3, alpha=0.4, linewidths=0)
-            ax.set_title(
-                f"{src_name}\n"
-                f"{subset['mmsi'].nunique():,} vessels | {len(subset):,} pts",
-                fontsize=8,
-            )
+        for ax, src_name in zip(axes, src_names):
+            lons, lats, u, n = plot_data[win_name][src_name]
+            ax.scatter(lons, lats, s=0.3, alpha=0.4, linewidths=0)
+            ax.set_title(f"{src_name}\n{u:,} vessels | {n:,} pts", fontsize=8)
             ax.set_xlabel("Longitude", fontsize=7)
             ax.set_ylabel("Latitude", fontsize=7)
             ax.tick_params(labelsize=6)
