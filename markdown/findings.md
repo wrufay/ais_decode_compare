@@ -37,6 +37,16 @@ NM4 contains approximately 55× more unique vessels than streaming. The NM4 sour
 
 **Implication:** NM4 and streaming cannot be treated as equivalent sources. Comparisons between decoders are only meaningful within the same source type (NM4 vs NM4, or streaming vs streaming).
 
+**Figure 1 — Vessel positions, 00:00–03:00 UTC (all five sources)**
+![Vessel positions 00h-03h](../data/plots/routes_00h-03h.png)
+
+*Scatter plot of decoded lat/lon positions. The density difference between NM4 sources (original_nm4, aisdb_nm4, reference_csv — columns 1, 3, 5) and streaming sources (columns 2, 4) is immediately visible. All three NM4-based sources show dense global shipping lane coverage; streaming sources are sparse by comparison.*
+
+**Figure 2 — Records per UTC hour (all sources, full day)**
+![Temporal coverage](../data/validation/plots/temporal_coverage.png)
+
+*Activity is consistent across the full day for all sources. The shaded regions indicate the two 3-hour comparison windows used in this study (00h–03h and 21h–24h). Neither window is anomalous — both are representative of typical activity.*
+
 ---
 
 ## Finding 2 — Sentinel coordinate values are handled differently by each decoder
@@ -88,6 +98,21 @@ For the two 3-hour comparison windows:
 **Coordinate accuracy** (`data/validation/plots/coord_error_distribution.png`): For a 1,000-vessel sample of shared MMSIs, the mean positional difference between the two sources is near-zero. The distribution is sharply concentrated at 0° error for both latitude and longitude, with a small tail of outliers attributable to vessels that moved between the timestamps used by each source.
 
 **Important caveat:** The reference CSV's decoding method is not known. If it was produced using the same or similar logic as the original decoder, the high agreement rate may reflect shared methodology rather than fully independent verification.
+
+**Figure 3 — MMSI set overlap heatmap (Jaccard similarity, all source pairs)**
+![MMSI overlap heatmap](../data/validation/plots/mmsi_overlap_heatmap.png)
+
+*Dark green = high overlap, light yellow = low overlap. The checkerboard pattern immediately reveals the two dataset groups: NM4-based sources (original_nm4, aisdb_nm4, reference_csv) form one cluster with Jaccard scores of 0.907–0.989, while streaming sources form a separate cluster. Cross-group similarity is ~0.015 — effectively no overlap.*
+
+**Figure 4 — Coordinate error distribution (original_nm4 vs reference_csv, 1,000 vessel sample)**
+![Coordinate error distribution](../data/validation/plots/coord_error_distribution.png)
+
+*Nearly all sampled vessels show near-zero positional difference between the original decoder and the reference CSV. The sharp spike at 0° confirms that where both sources agree a vessel exists, they also agree on where it was.*
+
+**Figure 5 — Example vessel track (MMSI 316036575)**
+![Vessel track MMSI 316036575](../data/validation/plots/track_mmsi_316036575.png)
+
+*Side-by-side track for one of the most active shared vessels. The original decoder (left) shows a dense cluster of overlapping points — characteristic of a vessel broadcast received by many stations simultaneously, all logged as separate records. The reference CSV (right) shows a cleaner, sparser track — consistent with pre-aggregation across stations.*
 
 ---
 
@@ -149,6 +174,11 @@ Breakdown of the 17,309 vessels present in the reference CSV but absent from ais
 The largest group of missing vessels had 11–50 messages in the reference CSV, and 1,924 vessels with 100+ messages are also absent from aisdb. This indicates the gap is not simply a matter of aisdb dropping low-activity vessels — it likely reflects aisdb's deduplication of multi-station receptions, where the same broadcast received by multiple stations is merged into fewer records. The significant number of missing aids to navigation (27.5%) may also reflect deliberate filtering in aisdb for non-vessel MMSI types.
 
 Further investigation is needed to fully characterise the cause of the gap.
+
+**Figure 6 — Missing vessel breakdown (aisdb vs reference CSV)**
+![Missing from aisdb vs reference](../data/validation/plots/missing_from_aisdb_vs_reference_breakdown.png)
+
+*Left: MMSI type breakdown of the 17,309 vessels present in the reference CSV but absent from aisdb. Regular vessels and aids to navigation account for the majority. Right: message count distribution — the largest group of missing vessels had 11–50 messages in the reference CSV, indicating the gap is not simply from dropping low-activity vessels.*
 
 ---
 
