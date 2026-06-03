@@ -142,9 +142,11 @@ to find the bottleneck. Tests three modes on the same input data:
 | aisdb → SQLite (parse + write) | 29.37s | 40,101 rows/s |
 | original decoder → NetCDF | 59.73s | 24,747 rows/s |
 
-**Conclusion:** aisdb's parser is ~11x faster than the original decoder.
-SQLite writes consume 81% of aisdb's time. End-to-end aisdb is 2x faster
-than the original serial decoder. PostgreSQL would likely close that gap further.
+**Valid conclusions from this test:**
+- aisdb SQLite is **2x faster end-to-end** than the original serial decoder (29s vs 60s)
+- SQLite writes consume **81%** of aisdb's total time — the parser is not the bottleneck
+- aisdb :memory: vs original NetCDF is **not a fair comparison** — one skips disk writes, the other doesn't
+- Pure parse speed cannot be isolated for the original decoder since it always writes to NetCDF
 
 **Runtime:** ~2 minutes for 3 files.
 

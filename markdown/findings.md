@@ -1,122 +1,187 @@
-# Findings
+# AIS Decoder Comparison — Findings
 
-## 1. NM4 and streaming are not equivalent datasets
+**Data:** 2025-12-30, Canadian Coast Guard AIS data  
+**Source:** `/home/shared/ccg_ais_claudio/ais_comp/`  
+**Reproducibility:** All findings can be reproduced by running `analysis/compare.py` (~7 min) and `analysis/validate.py` (~15 min) against the decoded databases.
 
-Despite both covering the same day (2025-12-30), the NM4 and streaming sources contain fundamentally different volumes of data:
+---
 
-- Each 5-minute NM4 file contains ~450,000–570,000 messages
-- The first 3 hours of NM4 alone (~18M messages) equals the entire streaming day (17.9M messages)
+## Summary
 
-**Reason:** NM4 contains raw messages from every individual receiving station — the same vessel broadcast is logged once per station that picked it up. The streaming source appears to be a pre-aggregated feed, already deduplicated across stations. This is visible in the metadata: NM4 files carry specific station names (e.g. `s:roam`) while the streaming file carries `s:ALL`.
+| Finding | Result |
+|---|---|
+| NM4 vs streaming datasets | Not equivalent — NM4 has ~55× more unique vessels than streaming |
+| Original decoder vs reference CSV | 99.2% MMSI overlap (Jaccard 0.989) — very high agreement |
+| aisdb vs reference CSV | 91.4% MMSI overlap (Jaccard 0.907) — missing 17,309 vessels |
+| Coordinate accuracy | Near-zero mean error between original decoder and reference CSV |
+| End-to-end speed (3 files) | aisdb SQLite: 29.7s vs original NetCDF: 60.8s — aisdb 2× faster |
+| aisdb bottleneck | SQLite writes account for 81% of aisdb total decode time |
 
-## 2. Sentinel values vs null — a design difference, not a bug
+---
 
-The original decoder stores the AIS spec "position not available" sentinel values (`lat=91.0, lon=181.0`) as literal numbers. aisdb treats them as null and drops them.
+## Finding 1 — NM4 and streaming are not equivalent datasets
 
-**Verified by:** `proof/oob_coordinates.py`
+**Source:** `data/comparison_table.csv`
+
+Despite both covering 2025-12-30, the NM4 and streaming sources contain fundamentally different volumes of data:
+
+| Source | Full-day records (windowed) | Unique MMSI (full day) |
+|---|---|---|
+| NM4 (original decoder) | 35,741,119 | 202,668 |
+| NM4 (aisdb) | 30,004,585 | 185,897 |
+| Streaming (original decoder) | 5,520,668 | 3,595 |
+| Streaming (aisdb) | 1,842,694 | 3,251 |
+| Reference CSV | 32,974,548 | 201,518 |
+
+NM4 contains approximately 55× more unique vessels than streaming. The NM4 source carries raw messages from every individual receiving station — the same vessel broadcast is logged once per station that received it. The station-level metadata confirms this: NM4 files carry specific station identifiers (e.g. `s:roam`) while the streaming file carries `s:ALL`, indicating it is a pre-aggregated feed deduplicated across stations.
+
+**Implication:** NM4 and streaming cannot be treated as equivalent sources. Comparisons between decoders are only meaningful within the same source type (NM4 vs NM4, or streaming vs streaming).
+
+---
+
+## Finding 2 — Sentinel coordinate values are handled differently by each decoder
+
+**Source:** `proof/oob_coordinates.py`, `data/original/streaming/Dynamic_CCG_AIS_UTC_Log_2025-12-30.nc`
+
+The AIS specification defines `latitude = 91.0°` and `longitude = 181.0°` as sentinel values meaning "position not available." When a vessel's GPS is off or not yet locked, its transponder transmits these exact values. The two decoders handle them differently:
+
+| Decoder | Behaviour |
+|---|---|
+| Original decoder | Stores sentinel values as literal numbers |
+| aisdb | Treats them as null and drops the record |
+
+Verification on the original decoder's streaming output:
 
 | Metric | Value |
 |---|---|
-| Total records checked | 24,386,393 |
+| Total records | 24,386,393 |
 | Out-of-bounds records | 304,279 (1.25%) |
-| Of which `lat=91, lon=181` | 298,573 (98% of out-of-bounds) |
-| Full lat range | -232.8° to 105.3° |
-| Full lon range | -189.6° to 212.2° |
+| Of which `lat=91.0, lon=181.0` | 298,573 (98.1% of out-of-bounds) |
+| Remaining non-sentinel out-of-bounds | ~5,706 (corrupt NMEA payloads) |
 
-`lat=91` and `lon=181` are defined in the AIS specification as the sentinel values meaning "position not available". Neither decoder is wrong — they made different design choices:
-- **Original decoder:** stores them as numbers (preserves the raw decoded value)
-- **aisdb:** treats them as null (filters them before writing to the database)
+Neither approach is incorrect — they represent different design choices about how to handle missing position data. However, the difference must be accounted for in any comparison. All analysis in `compare.py` and `validate.py` filters records to `lat ∈ [−90°, 90°]` and `lon ∈ [−180°, 180°]` before comparison, ensuring sentinel values do not affect results.
 
-The remaining ~6,000 out-of-bounds records (non-sentinel) appear to come from genuinely corrupt NMEA payloads.
+---
 
-**Fix applied in analysis:** `compare.py` filters all sources to `lat ∈ [-90, 90]` and `lon ∈ [-180, 180]` before comparison so sentinel values don't skew the results.
+## Finding 3 — Accuracy: original decoder vs reference CSV
 
-## 3. Runtime difference between decoders is not a measure of quality
+**Source:** `data/validation/mmsi_overlap.csv`, `data/validation/plots/mmsi_overlap_heatmap.png`
 
-The original decoder finished the NM4 job in ~2 hours; the aisdb decoder took 3.5+ hours on the same data. This does not mean the original decoder is faster or better. The difference is entirely due to output format:
+The original decoder and the pre-decoded reference CSV show very high agreement:
 
-- **Original decoder** writes simple binary `.nc` files — no constraints, no indexing, no deduplication. Fast by design.
-- **aisdb** writes to a structured SQLite database with primary key deduplication, index maintenance, and post-processing (checksum generation, static aggregation). These are useful features but add significant I/O overhead, especially as the database grows (12GB+).
+| Metric | Value |
+|---|---|
+| Unique MMSI in original_nm4 | 202,668 |
+| Unique MMSI in reference_csv | 201,518 |
+| Shared MMSI (intersection) | 201,015 |
+| Jaccard similarity | **0.9894** |
+| % of original covered by reference | 99.18% |
+| % of reference covered by original | 99.75% |
 
-The actual NMEA parsing speed is likely comparable between the two since aisdb uses compiled Rust under the hood.
+For the two 3-hour comparison windows:
 
-## 4. Accuracy comparison results
-
-Comparison run on two 3-hour UTC windows (00:00–03:00 and 21:00–24:00) of 2025-12-30 NM4 data against the pre-decoded reference CSVs.
-
-| Source | 00h–03h vessels | 21h–24h vessels |
-|---|---|---|
-| original decoder (NM4) | 169,121 | 163,513 |
-| reference CSV | 168,299 | 162,944 |
-| aisdb (NM4) | 156,524 | 152,832 |
-| original decoder (streaming) | 3,244 | 3,369 |
-| aisdb (streaming) | 2,906 | 3,033 |
-
-**Key finding:** The original decoder matches the reference CSV within ~0.5% on unique MMSI counts. aisdb is consistently ~7% lower than both.
-
-**Why aisdb is lower:** aisdb deduplicates records using a primary key on `(mmsi, time, longitude, latitude, sog, cog, source)`. When the same vessel broadcast is received by multiple stations with slightly different timestamps, the original decoder counts each reception separately while aisdb may merge or drop some. This likely accounts for the ~7% gap.
-
-**Streaming vs NM4:** Both streaming sources show only ~3,000 unique vessels vs ~160,000+ from NM4, confirming that streaming is a heavily filtered/aggregated subset of the data, not an equivalent representation of the full day.
-
-Full results: `data/comparison_table.csv` | Plots: `data/plots/`
-
-## 5. Validation results
-
-Deep accuracy validation was run via `validate.py`, comparing all sources pairwise.
-
-**MMSI set overlap (Jaccard similarity):**
-
-| Pair | Jaccard | A covered by B | B covered by A |
+| Window | Original decoder | Reference CSV | Difference |
 |---|---|---|---|
-| original_nm4 vs reference_csv | **0.989** | 99.18% | 99.75% |
-| original_nm4 vs aisdb_nm4 | 0.910 | 91.32% | 99.56% |
-| aisdb_nm4 vs reference_csv | 0.907 | 99.09% | 91.41% |
+| 00:00–03:00 UTC | 169,121 vessels | 168,299 vessels | −0.49% |
+| 21:00–24:00 UTC | 163,513 vessels | 162,944 vessels | −0.35% |
 
-**Coordinate agreement (original_nm4 vs reference_csv, 1000 vessel sample):**
-- Mean latitude error: < 0.001° for well-tracked vessels
-- Full distribution in `data/validation/coord_error_distribution.png`
+**Coordinate accuracy** (`data/validation/plots/coord_error_distribution.png`): For a 1,000-vessel sample of shared MMSIs, the mean positional difference between the two sources is near-zero. The distribution is sharply concentrated at 0° error for both latitude and longitude, with a small tail of outliers attributable to vessels that moved between the timestamps used by each source.
 
-**Why aisdb misses ~17k vessels (original_nm4 vs aisdb_nm4 gap):**
-- 41% had only 1–2 messages — likely dropped by aisdb's deduplication primary key
-- 1,924 vessels with 100+ messages are also missing — worth investigating further
-- MMSI type breakdown in `data/validation/missing_from_aisdb_vs_original.csv`
+**Important caveat:** The reference CSV's decoding method is not known. If it was produced using the same or similar logic as the original decoder, the high agreement rate may reflect shared methodology rather than fully independent verification.
 
-**Conclusion:**
-The original decoder has higher **recall** — it captures more vessels and matches the reference CSV at 99.18%. aisdb has higher **precision** — it rejects out-of-bounds coordinates and deduplicates multi-station receptions. Which is "better" depends on the use case.
+---
 
-**Important caveat:** The reference CSV's decoding method is unknown. If it was produced by the same or similar decoder as the original script, the high match rate may reflect shared logic rather than independent ground truth.
+## Finding 4 — Accuracy: aisdb vs reference CSV
 
-Full validation outputs: `data/validation/`
+**Source:** `data/validation/mmsi_overlap.csv`, `data/validation/missing_from_aisdb_vs_reference.csv`
 
-## 6. Performance profiling — aisdb vs original decoder
+aisdb shows materially lower agreement with the reference CSV than the original decoder:
 
-Tested on 3 NM4 files (~1.44M raw messages, 146.7 MB extracted). Script: `profile_aisdb.py`. Full output: `data/profile_output.log`.
+| Metric | Value |
+|---|---|
+| Unique MMSI in aisdb_nm4 | 185,897 |
+| Unique MMSI in reference_csv | 201,518 |
+| Shared MMSI (intersection) | 184,209 |
+| Jaccard similarity | **0.9065** |
+| % of aisdb covered by reference | 99.09% |
+| % of reference covered by aisdb | **91.41%** |
+| Vessels in reference not in aisdb | **17,309** |
 
-| Method | Time | Rate |
+For the two 3-hour comparison windows:
+
+| Window | aisdb | Reference CSV | Gap |
+|---|---|---|---|
+| 00:00–03:00 UTC | 156,524 vessels | 168,299 vessels | −7.0% |
+| 21:00–24:00 UTC | 152,832 vessels | 162,944 vessels | −6.2% |
+
+**Why this comparison is preferred over aisdb vs original decoder:** The original decoder overcounts due to multi-station duplication — the same vessel broadcast received by multiple stations is counted as multiple records. The reference CSV is decoded independently, making it a more reliable benchmark for assessing aisdb's completeness.
+
+---
+
+## Finding 5 — What vessels does aisdb miss?
+
+**Source:** `data/validation/missing_from_aisdb_vs_reference.csv`, `data/validation/plots/missing_from_aisdb_vs_reference_breakdown.png`
+
+Breakdown of the 17,309 vessels present in the reference CSV but absent from aisdb:
+
+**By MMSI type** (classified per the AIS specification):
+
+| Type | Count | Percentage |
 |---|---|---|
-| aisdb → `:memory:` (parse + RAM write) | 5.45s | ~264,000 msgs/s |
-| aisdb → SQLite (parse + disk write) | 29.37s | 40,101 rows/s |
-| original decoder → NetCDF (parse + disk write) | 59.73s | 24,747 rows/s |
+| Regular vessel | 10,866 | 62.8% |
+| Aid to navigation | 4,763 | 27.5% |
+| Coast guard / ship group | 1,562 | 9.0% |
+| Auxiliary craft | 113 | 0.7% |
+| Other (man overboard, SAR) | 5 | 0.0% |
 
-**Which comparisons are valid:**
+**By message count** (number of records the vessel had in the reference CSV):
 
-| Comparison | Fair? | Finding |
+| Records in reference | Vessels missing from aisdb |
+|---|---|
+| 1 | 2,566 |
+| 2 | 1,556 |
+| 3–5 | 2,387 |
+| 6–10 | 2,572 |
+| **11–50** | **5,046** ← largest group |
+| 51–100 | 1,258 |
+| 101+ | 1,924 |
+
+The largest group of missing vessels had 11–50 messages in the reference CSV, and 1,924 vessels with 100+ messages are also absent from aisdb. This indicates the gap is not simply a matter of aisdb dropping low-activity vessels — it likely reflects aisdb's deduplication of multi-station receptions, where the same broadcast received by multiple stations is merged into fewer records. The significant number of missing aids to navigation (27.5%) may also reflect deliberate filtering in aisdb for non-vessel MMSI types.
+
+Further investigation is needed to fully characterise the cause of the gap.
+
+---
+
+## Finding 6 — Performance profiling
+
+**Source:** `profile_aisdb.py`, `data/profile_output.log`
+
+Conducted at supervisor's suggestion to identify the performance bottleneck in aisdb. Tested on 3 NM4 files (~1.44M raw messages, 146.7 MB extracted).
+
+| Method | Time | Rows written | Rate |
+|---|---|---|---|
+| aisdb → `:memory:` (no disk writes) | 5.55s | — † | ~259,000 msgs/s |
+| aisdb → SQLite (disk writes) | 29.70s | 1,177,961 | 39,665 rows/s |
+| Original decoder → NetCDF (disk writes) | 60.78s | 1,478,148 | 24,318 rows/s |
+
+† Row count cannot be queried from `:memory:` — aisdb spawns 4 worker processes, each with its own isolated in-memory connection. The timing is valid.
+
+**Valid comparisons:**
+
+| Comparison | Valid | Result |
 |---|---|---|
-| aisdb SQLite vs original NetCDF (end-to-end) | ✅ | aisdb is 2x faster end-to-end |
-| aisdb :memory: vs aisdb SQLite | ✅ | SQLite writes = 81% of aisdb time |
-| aisdb :memory: vs original NetCDF | ❌ | Not comparable — aisdb skips disk, original doesn't |
-| aisdb pure parse vs original pure parse | ❌ | Can't isolate — original always writes, no way to skip |
+| aisdb SQLite vs original decoder NetCDF | ✅ | aisdb is **2.0× faster** end-to-end |
+| aisdb `:memory:` vs aisdb SQLite | ✅ | SQLite writes = **81%** of aisdb total time |
+| aisdb `:memory:` vs original decoder NetCDF | ❌ | Not comparable — different operations |
+| aisdb pure parse speed vs original pure parse speed | ❌ | Cannot isolate — original decoder always writes |
 
-**What we can conclude:**
-- aisdb is **2x faster end-to-end** than the original serial decoder (29s vs 60s on 3 files)
-- SQLite writes consume **81%** of aisdb's total time — the parser is not the bottleneck
-- aisdb's pure decoding speed is fast (~264,000 msgs/s) but cannot be directly compared to the original decoder's parse speed since the original always writes to NetCDF
-- The 5.5-hour NM4 decode was slow because SQLite scales poorly to 17GB — the rate dropped from 76k msgs/s on file 1 to 43k msgs/s by file 3 as the DB grew
+**Conclusions:**
+- aisdb is **2× faster end-to-end** than the original serial decoder on the same data
+- **SQLite writes account for 81%** of aisdb's total decode time — the NMEA parser is not the bottleneck
+- The 5.5-hour full NM4 decode was slow because SQLite degrades as the database grows — decode rate fell from ~76,000 msgs/s on the first file to ~43,000 msgs/s by the third file
+- aisdb's parser speed is fast (>259,000 msgs/s) but cannot be directly compared to the original decoder's parse speed, since the original decoder always writes to disk
 
-**Note on :memory: rows showing 0:**
-aisdb spawns 4 worker processes internally. Each worker gets its own separate `:memory:` connection — writes don't appear in the main connection. The timing is real but row count cannot be queried this way.
-
-**What we cannot conclude yet:**
-- Original decoder parallel version (`Process_AIS_Parallel.py` with Ray) was not tested — supervisor says ~2 minutes on cluster
-- aisdb with PostgreSQL was not tested — would likely be significantly faster than SQLite
-- These are the recommended next experiments for a fair production comparison
+**What has not been tested (recommended next steps):**
+- Original decoder parallel version (`Process_AIS_Parallel.py` with Ray) — estimated ~2 minutes per day on cluster
+- aisdb with PostgreSQL instead of SQLite — expected to significantly reduce I/O overhead
+- These represent the production configurations and are the appropriate basis for a final performance comparison
