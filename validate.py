@@ -2,12 +2,104 @@
 """
 validate.py — Deep accuracy validation of AIS decoder outputs.
 
-Produces:
-  data/validation/mmsi_overlap.csv        — pairwise MMSI set overlap between all sources
-  data/validation/coord_agreement.csv     — lat/lon agreement for matched vessels
-  data/validation/temporal_coverage.csv  — records per hour per source
-  data/validation/top_vessels.csv        — most active vessels across sources
-  data/validation/plots/                 — vessel track plots and distribution charts
+PURPOSE
+-------
+This script goes beyond the high-level counts in compare.py to answer the
+question: how do we know the results are accurate and not fabricated? It
+produces concrete, verifiable evidence for each finding in findings.md by
+running six independent analyses across all five data sources.
+
+INPUT SOURCES
+-------------
+Same five sources as compare.py (see compare.py docstring for full details):
+  1. original_nm4       — data/original/nm4/Dynamic_*.nc
+  2. original_streaming — data/original/streaming/Dynamic_*.nc
+  3. aisdb_nm4          — data/decode_nm4.db
+  4. aisdb_streaming    — data/decode_streaming.db
+  5. reference_csv      — /home/shared/ccg_ais_claudio/ais_comp/csv/
+
+The same two 3-hour UTC time windows and coordinate bounds as compare.py
+are applied throughout.
+
+ANALYSES
+--------
+1. MMSI pairwise overlap
+   For every pair of sources, computes: intersection size, union size,
+   Jaccard similarity, and what % of each source's vessels appear in the
+   other. Saved as mmsi_overlap.csv and visualised as a heatmap.
+
+2. Coordinate agreement (original_nm4 vs reference_csv)
+   For up to 1000 shared vessels, computes the mean position of each vessel
+   in both sources and reports the absolute lat/lon difference. This answers:
+   "do the decoders agree on where the same vessel was?" Saved as
+   coord_agreement.csv with an error distribution plot.
+
+3. Vessel track spot checks
+   For the 5 most active shared vessels (original_nm4 ∩ reference_csv),
+   plots the full position track from each source side by side. Visual
+   confirmation that the same vessel follows the same path in both decoders.
+
+4. Temporal coverage
+   Counts records per UTC hour for each source and plots them together.
+   Confirms data is present across the expected time range and that the two
+   comparison windows (00h-03h, 21h-24h) are representative, not anomalous.
+
+5. Top 20 most active vessels per source
+   Ranks vessels by message count in each source. Cross-checking that the
+   same vessels appear at the top across sources is a basic sanity check.
+
+6. Missing MMSI analysis
+   Identifies vessels present in one source but absent from another, then
+   classifies them by MMSI type (regular vessel, auxiliary craft, aid to
+   navigation, SAR aircraft, etc.) and by message count. This explains the
+   ~7% MMSI gap between the original decoder and aisdb — most missing vessels
+   had only 1–2 messages, consistent with aisdb's deduplication behaviour.
+
+   Three pairs are analysed:
+     - original_nm4  vs aisdb_nm4   → missing_from_aisdb_vs_original.csv
+     - reference_csv vs aisdb_nm4   → missing_from_aisdb_vs_reference.csv
+     - original_nm4  vs reference_csv → missing_from_reference_vs_original.csv
+
+MMSI TYPE CLASSIFICATION
+------------------------
+MMSI numbers encode vessel type by their numeric prefix (AIS specification):
+  < 10,000,000     — coast guard or ship group (leading zeros lost as integer)
+  970,000,000–970,999,999 — SAR aircraft
+  972,000,000–972,999,999 — man overboard device
+  974,000,000–974,999,999 — EPIRB
+  980,000,000–989,999,999 — auxiliary craft (attached to a parent vessel)
+  990,000,000–999,999,999 — aids to navigation (buoys, beacons, etc.)
+  All others               — regular vessel (MID-based country code)
+
+MEMORY DESIGN
+-------------
+Sources are loaded one at a time. Only original_nm4 and reference_csv are
+kept in memory simultaneously (needed for the coordinate agreement and track
+analyses). All other sources are freed before the next is loaded.
+Per-MMSI record counts are stored as compact Series (one row per vessel)
+rather than keeping the full DataFrames.
+
+OUTPUT
+------
+  data/validation/mmsi_overlap.csv
+  data/validation/coord_agreement.csv
+  data/validation/temporal_coverage.csv
+  data/validation/top_vessels.csv
+  data/validation/missing_from_aisdb_vs_original.csv
+  data/validation/missing_from_aisdb_vs_reference.csv
+  data/validation/missing_from_reference_vs_original.csv
+  data/validation/plots/mmsi_overlap_heatmap.png
+  data/validation/plots/coord_error_distribution.png
+  data/validation/plots/temporal_coverage.png
+  data/validation/plots/track_mmsi_<MMSI>.png  (5 files)
+  data/validation/plots/missing_from_*_breakdown.png  (3 files)
+
+USAGE
+-----
+    .venv/bin/python -u validate.py
+
+The -u flag forces unbuffered output so progress prints immediately.
+Runtime: ~15 minutes.
 """
 
 import gc

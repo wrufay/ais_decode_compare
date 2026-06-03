@@ -1,14 +1,53 @@
 #!/usr/bin/env python3
 """
-proof/oob_coordinates.py
+proof/oob_coordinates.py — Verify Finding #2 from findings.md.
 
-Demonstrates that the original decoder passes through physically impossible
-lat/lon coordinates — specifically the AIS spec sentinel values (lat=91,
-lon=181) which indicate "position not available" but are stored as-is rather
-than treated as null.
+PURPOSE
+-------
+Provides concrete, reproducible proof that the original decoder
+(Process_AIS_Serial.py) stores AIS sentinel coordinate values as numbers
+rather than filtering them out, while aisdb treats them as null.
 
-Run from repo root:
-    .venv/bin/python proof/oob_coordinates.py
+BACKGROUND
+----------
+The AIS specification defines two sentinel values to indicate that a vessel's
+position is not currently available:
+  - latitude  = 91.0°   (outside the valid range of -90 to 90)
+  - longitude = 181.0°  (outside the valid range of -180 to 180)
+
+When a vessel's GPS is off or not yet locked, its AIS transponder transmits
+these exact values. A decoder can either:
+  (a) Store them as numbers — what Process_AIS_Serial.py does
+  (b) Treat them as null and drop the record — what aisdb does
+
+Neither approach is wrong; they are different design choices. However, the
+difference means the original decoder's output contains physically impossible
+coordinates that must be filtered before analysis.
+
+WHAT THIS SCRIPT SHOWS
+-----------------------
+- Total records and what % have out-of-bounds coordinates
+- The full lat/lon range (shows extreme values from sentinel + corrupt data)
+- That 98% of out-of-bounds records are exactly lat=91, lon=181 (the sentinel)
+- The remaining ~2% are from genuinely corrupt NMEA payloads
+- Sample rows showing specific affected MMSIs
+
+EXPECTED OUTPUT (2025-12-30 streaming source)
+---------------------------------------------
+  Total valid records:     24,386,393
+  Out-of-bounds lat/lon:   304,279  (1.25%)
+  Most common pair:        lat=91.0, lon=181.0  →  298,573 records (98%)
+
+INPUT
+-----
+  data/original/streaming/Dynamic_CCG_AIS_UTC_Log_2025-12-30.nc
+  (output of Process_AIS_Serial.py on the streaming source)
+
+USAGE
+-----
+  .venv/bin/python proof/oob_coordinates.py
+
+Must be run from the repo root directory.
 """
 
 import netCDF4

@@ -1,10 +1,92 @@
 #!/usr/bin/env python3
 """
-compare.py — Compare outputs of the two AIS decoders against the reference CSVs.
+compare.py — Compare outputs of the two AIS decoders against reference data.
 
-Produces:
-  data/comparison_table.csv   — metrics per source × window
-  data/plots/routes_*.png     — scatter plots of vessel positions per window
+PURPOSE
+-------
+This is the main comparison script in the decoder study. It reads the decoded
+outputs from both decoders (original and aisdb) and the pre-decoded reference
+CSVs, then produces a side-by-side comparison of unique vessel counts, record
+counts, and geographic coverage.
+
+INPUT SOURCES
+-------------
+Five sources are loaded and compared:
+
+  1. original_nm4      — NetCDF (.nc) files produced by Process_AIS_Serial.py
+                         on the NM4 data. 288 Dynamic_*.nc files, one per
+                         5-minute chunk. Located at data/original/nm4/.
+
+  2. original_streaming — Single NetCDF file produced by Process_AIS_Serial.py
+                          on the streaming data. Located at
+                          data/original/streaming/.
+
+  3. aisdb_nm4         — SQLite database produced by decode_aisdb.py on the
+                         NM4 data. Located at data/decode_nm4.db.
+                         Table: ais_202512_dynamic.
+
+  4. aisdb_streaming   — SQLite database produced by decode_aisdb.py on the
+                         streaming data. Located at data/decode_streaming.db.
+                         Table: ais_202512_dynamic.
+
+  5. reference_csv     — Pre-decoded tabular CSVs provided alongside the raw
+                         data. 288 zipped CSV files covering the same day.
+                         Located at /home/shared/ccg_ais_claudio/ais_comp/csv/.
+                         These serve as the ground-truth reference.
+
+TIME WINDOWS
+------------
+Rather than loading the full day (which caused out-of-memory crashes at
+~140M records), comparison is performed on two representative 3-hour UTC
+windows:
+
+  - 00h-03h: 00:00–03:00 UTC  (epoch 1767052800–1767063600)
+  - 21h-24h: 21:00–24:00 UTC  (epoch 1767128400–1767139200)
+
+All filtering is pushed into the loaders (SQL WHERE clauses for SQLite,
+NumPy masks for NetCDF, per-chunk filtering for CSVs) so only the relevant
+rows are ever held in memory.
+
+TIMESTAMP HANDLING
+------------------
+Each source uses a different timestamp representation:
+  - NetCDF (.nc):    date_num column, Unix epoch integer
+  - aisdb SQLite:    time column, Unix epoch integer
+  - Reference CSV:   reception_timestamp column, UTC datetime string
+                     (NOT ais_seconds — that is the AIS payload
+                     second-of-minute field, 0–59, not a Unix timestamp)
+
+COORDINATE FILTERING
+--------------------
+Records where lat/lon are physically impossible are dropped from all sources
+before comparison:
+  - lat must be in [-90, 90]
+  - lon must be in [-180, 180]
+This removes AIS sentinel values (lat=91, lon=181 meaning "not available")
+that the original decoder stores as numbers rather than null.
+
+MEMORY DESIGN
+-------------
+Sources are loaded one at a time. Each source's metrics and plot data are
+extracted before the DataFrame is freed, so peak memory is the size of the
+largest single source rather than all five combined. This was necessary to
+avoid OOM kills on a 30GB machine with 17GB+ of decoded data.
+
+OUTPUT
+------
+  data/comparison_table.csv     — one row per source × window with:
+                                   records, unique_mmsi, avg_msgs_vessel,
+                                   lat/lon bounds, load time, file size,
+                                   full-day record count, yield %
+  data/plots/routes_00h-03h.png — scatter plot of vessel positions, all 5
+  data/plots/routes_21h-24h.png   sources side by side, for each window
+
+USAGE
+-----
+    .venv/bin/python -u compare.py
+
+The -u flag forces unbuffered output so progress prints immediately.
+Runtime: ~7 minutes.
 """
 
 import glob
