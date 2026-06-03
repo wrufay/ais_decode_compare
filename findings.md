@@ -9,13 +9,27 @@ Despite both covering the same day (2025-12-30), the NM4 and streaming sources c
 
 **Reason:** NM4 contains raw messages from every individual receiving station — the same vessel broadcast is logged once per station that picked it up. The streaming source appears to be a pre-aggregated feed, already deduplicated across stations. This is visible in the metadata: NM4 files carry specific station names (e.g. `s:roam`) while the streaming file carries `s:ALL`.
 
-## 2. The original decoder passes through invalid coordinates
+## 2. Sentinel values vs null — a design difference, not a bug
 
-The original decoder (`Process_AIS_Serial.py`) does not validate lat/lon values after decoding. Approximately **1.35% of records** in the streaming output contained physically impossible coordinates (e.g. lat = 105°, lon = 212°). These come from corrupt or malformed NMEA payloads that decode to garbage values.
+The original decoder stores the AIS spec "position not available" sentinel values (`lat=91.0, lon=181.0`) as literal numbers. aisdb treats them as null and drops them.
 
-The aisdb decoder appears to handle this more strictly. This difference in permissiveness is worth investigating in the final comparison.
+**Verified by:** `proof/oob_coordinates.py`
 
-**Fix applied:** `compare.py` filters all sources to `lat ∈ [-90, 90]` and `lon ∈ [-180, 180]` before any analysis.
+| Metric | Value |
+|---|---|
+| Total records checked | 24,386,393 |
+| Out-of-bounds records | 304,279 (1.25%) |
+| Of which `lat=91, lon=181` | 298,573 (98% of out-of-bounds) |
+| Full lat range | -232.8° to 105.3° |
+| Full lon range | -189.6° to 212.2° |
+
+`lat=91` and `lon=181` are defined in the AIS specification as the sentinel values meaning "position not available". Neither decoder is wrong — they made different design choices:
+- **Original decoder:** stores them as numbers (preserves the raw decoded value)
+- **aisdb:** treats them as null (filters them before writing to the database)
+
+The remaining ~6,000 out-of-bounds records (non-sentinel) appear to come from genuinely corrupt NMEA payloads.
+
+**Fix applied in analysis:** `compare.py` filters all sources to `lat ∈ [-90, 90]` and `lon ∈ [-180, 180]` before comparison so sentinel values don't skew the results.
 
 ## 3. Runtime difference between decoders is not a measure of quality
 
