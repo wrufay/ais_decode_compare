@@ -1,0 +1,11 @@
+source_a,source_b,mmsi_in_a,mmsi_in_b,intersection,union,only_in_a,only_in_b,jaccard_similarity,pct_a_covered_by_b,pct_b_covered_by_a
+original_nm4,original_streaming,202668,3595,3155,203108,199513,440,0.0155,1.56,87.76
+original_nm4,aisdb_nm4,202668,185897,185080,203485,17588,817,0.9096,91.32,99.56
+original_nm4,aisdb_streaming,202668,3251,2899,203020,199769,352,0.0143,1.43,89.17
+original_nm4,reference_csv,202668,201518,201015,203171,1653,503,0.9894,99.18,99.75
+original_streaming,aisdb_nm4,3595,185897,2901,186591,694,182996,0.0155,80.7,1.56
+original_streaming,aisdb_streaming,3595,3251,3231,3615,364,20,0.8938,89.87,99.38
+original_streaming,reference_csv,3595,201518,3157,201956,438,198361,0.0156,87.82,1.57
+aisdb_nm4,aisdb_streaming,185897,3251,2911,186237,182986,340,0.0156,1.57,89.54
+aisdb_nm4,reference_csv,185897,201518,184209,203206,1688,17309,0.9065,99.09,91.41
+aisdb_streaming,reference_csv,3251,201518,2900,201869,351,198618,0.0144,89.2,1.44

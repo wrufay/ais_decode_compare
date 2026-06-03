@@ -15,3 +15,266 @@ Loading all sources for validation...
     1,842,694 records | 3,251 unique MMSI
 
   Loading reference_csv...
+    32,974,548 records | 201,518 unique MMSI
+
+======================================================================
+1. MMSI pairwise overlap
+======================================================================
+  original_nm4 vs original_streaming:
+    intersection: 3,155  |  Jaccard: 0.0155
+    original_nm4 coverage: 1.6% in original_streaming
+    original_streaming coverage: 87.8% in original_nm4
+  original_nm4 vs aisdb_nm4:
+    intersection: 185,080  |  Jaccard: 0.9096
+    original_nm4 coverage: 91.3% in aisdb_nm4
+    aisdb_nm4 coverage: 99.6% in original_nm4
+  original_nm4 vs aisdb_streaming:
+    intersection: 2,899  |  Jaccard: 0.0143
+    original_nm4 coverage: 1.4% in aisdb_streaming
+    aisdb_streaming coverage: 89.2% in original_nm4
+  original_nm4 vs reference_csv:
+    intersection: 201,015  |  Jaccard: 0.9894
+    original_nm4 coverage: 99.2% in reference_csv
+    reference_csv coverage: 99.8% in original_nm4
+  original_streaming vs aisdb_nm4:
+    intersection: 2,901  |  Jaccard: 0.0155
+    original_streaming coverage: 80.7% in aisdb_nm4
+    aisdb_nm4 coverage: 1.6% in original_streaming
+  original_streaming vs aisdb_streaming:
+    intersection: 3,231  |  Jaccard: 0.8938
+    original_streaming coverage: 89.9% in aisdb_streaming
+    aisdb_streaming coverage: 99.4% in original_streaming
+  original_streaming vs reference_csv:
+    intersection: 3,157  |  Jaccard: 0.0156
+    original_streaming coverage: 87.8% in reference_csv
+    reference_csv coverage: 1.6% in original_streaming
+  aisdb_nm4 vs aisdb_streaming:
+    intersection: 2,911  |  Jaccard: 0.0156
+    aisdb_nm4 coverage: 1.6% in aisdb_streaming
+    aisdb_streaming coverage: 89.5% in aisdb_nm4
+  aisdb_nm4 vs reference_csv:
+    intersection: 184,209  |  Jaccard: 0.9065
+    aisdb_nm4 coverage: 99.1% in reference_csv
+    reference_csv coverage: 91.4% in aisdb_nm4
+  aisdb_streaming vs reference_csv:
+    intersection: 2,900  |  Jaccard: 0.0144
+    aisdb_streaming coverage: 89.2% in reference_csv
+    reference_csv coverage: 1.4% in aisdb_streaming
+
+Saved: data/validation/mmsi_overlap.csv
+Saved: data/validation/plots/mmsi_overlap_heatmap.png
+
+======================================================================
+2. Coordinate agreement — original_nm4 vs reference_csv
+======================================================================
+  Vessels sampled:       1,000
+  Mean lat error (deg):  0.07234
+  Mean lon error (deg):  0.33999
+  Max  lat error (deg):  20.03545
+  Max  lon error (deg):  82.65456
+  Vessels with lat_diff < 0.01°: 927 (92.7%)
+  Saved: data/validation/coord_agreement.csv
+  Saved: data/validation/plots/coord_error_distribution.png
+
+======================================================================
+3. Vessel track spot checks
+======================================================================
+  Saved track plot: track_mmsi_316036575.png
+  Saved track plot: track_mmsi_368398270.png
+  Saved track plot: track_mmsi_367774610.png
+  Saved track plot: track_mmsi_368111650.png
+  Saved track plot: track_mmsi_671002300.png
+
+======================================================================
+4. Temporal coverage (records per UTC hour)
+======================================================================
+  Saved: data/validation/temporal_coverage.csv
+  Saved: data/validation/plots/temporal_coverage.png
+
+======================================================================
+5. Top 20 most active vessels per source
+======================================================================
+     mmsi  records             source
+205393000    30190       original_nm4
+671002300    24878       original_nm4
+636023801    21936       original_nm4
+564246000    20878       original_nm4
+244740921    20863       original_nm4
+205300000    20717       original_nm4
+  2241048    20370       original_nm4
+205483000    18803       original_nm4
+316036575    18751       original_nm4
+  2053508    18468       original_nm4
+368398270    18237       original_nm4
+255915921    17555       original_nm4
+255806109    17466       original_nm4
+205625000    17381       original_nm4
+205234000    17362       original_nm4
+205766000    17318       original_nm4
+367774610    17159       original_nm4
+368111650    17096       original_nm4
+244030522    16995       original_nm4
+205351190    16268       original_nm4
+  3160112    35647 original_streaming
+  3160106    24996 original_streaming
+993161004    22550 original_streaming
+316003663    21543 original_streaming
+993672196    21161 original_streaming
+993672195    20878 original_streaming
+993682096    19721 original_streaming
+993672194    19664 original_streaming
+316041968    19537 original_streaming
+316005667    18790 original_streaming
+368403000    18505 original_streaming
+316052438    18358 original_streaming
+338855000    17589 original_streaming
+  3160108    15484 original_streaming
+  3160096    15148 original_streaming
+  3160141    14966 original_streaming
+316048574    14568 original_streaming
+316042365    14556 original_streaming
+316042022    14163 original_streaming
+  3669705    14017 original_streaming
+316036575    18648          aisdb_nm4
+368398270    18021          aisdb_nm4
+367774610    16987          aisdb_nm4
+368111650    16798          aisdb_nm4
+671002300    13525          aisdb_nm4
+636023801    12440          aisdb_nm4
+538010610    10825          aisdb_nm4
+564246000     9608          aisdb_nm4
+518999826     9208          aisdb_nm4
+368248060     9151          aisdb_nm4
+316017640     9051          aisdb_nm4
+440313250     8523          aisdb_nm4
+368390440     8473          aisdb_nm4
+563082100     8362          aisdb_nm4
+351758000     8188          aisdb_nm4
+620800138     7809          aisdb_nm4
+235099364     7333          aisdb_nm4
+440335980     7309          aisdb_nm4
+567002860     7074          aisdb_nm4
+566950000     6950          aisdb_nm4
+316040103     9894    aisdb_streaming
+316011310     9843    aisdb_streaming
+316009640     9317    aisdb_streaming
+366999569     9267    aisdb_streaming
+316001019     8473    aisdb_streaming
+316055446     7725    aisdb_streaming
+255803880     7295    aisdb_streaming
+316054148     6696    aisdb_streaming
+338855000     5795    aisdb_streaming
+316044024     5781    aisdb_streaming
+316003663     5770    aisdb_streaming
+316033402     5568    aisdb_streaming
+316041968     5458    aisdb_streaming
+316052438     5374    aisdb_streaming
+316027034     5166    aisdb_streaming
+368926556     5166    aisdb_streaming
+368403000     5093    aisdb_streaming
+316012774     4799    aisdb_streaming
+316004240     4772    aisdb_streaming
+316025676     4596    aisdb_streaming
+316036575    19493      reference_csv
+368398270    18968      reference_csv
+367774610    17861      reference_csv
+368111650    17822      reference_csv
+671002300    16807      reference_csv
+636023801    14178      reference_csv
+538010610    10853      reference_csv
+564246000    10219      reference_csv
+  2241048     9933      reference_csv
+518999826     9706      reference_csv
+368248060     9563      reference_csv
+316017640     9499      reference_csv
+368390440     9276      reference_csv
+563082100     8688      reference_csv
+440313250     8672      reference_csv
+351758000     8335      reference_csv
+994444478     8216      reference_csv
+993672026     7952      reference_csv
+657273100     7923      reference_csv
+  2579999     7679      reference_csv
+
+Saved: data/validation/top_vessels.csv
+
+======================================================================
+6. Missing MMSI analysis — what aisdb misses vs original + reference
+======================================================================
+
+  original_nm4 vs aisdb_nm4:
+    In original_nm4 but not aisdb_nm4: 17,588
+    In aisdb_nm4 but not original_nm4: 817
+
+    MMSI type breakdown of missing vessels:
+      vessel                        : 11,017  (62.6%)
+      aid_to_navigation             :  4,824  (27.4%)
+      coast_guard_or_group          :  1,630  (9.3%)
+      auxiliary_craft               :    112  (0.6%)
+      man_overboard                 :      4  (0.0%)
+      SAR_aircraft                  :      1  (0.0%)
+
+    Message count distribution (records in original_nm4):
+count_bin
+1         2974
+2         1468
+3-5       2645
+6-10      2472
+11-50     5031
+51-100    1384
+101+      1614
+
+    Saved: data/validation/missing_from_aisdb_vs_original.csv
+    Saved: data/validation/plots/missing_from_aisdb_vs_original_breakdown.png
+
+  reference_csv vs aisdb_nm4:
+    In reference_csv but not aisdb_nm4: 17,309
+    In aisdb_nm4 but not reference_csv: 1,688
+
+    MMSI type breakdown of missing vessels:
+      vessel                        : 10,866  (62.8%)
+      aid_to_navigation             :  4,763  (27.5%)
+      coast_guard_or_group          :  1,562  (9.0%)
+      auxiliary_craft               :    113  (0.7%)
+      man_overboard                 :      4  (0.0%)
+      SAR_aircraft                  :      1  (0.0%)
+
+    Message count distribution (records in reference_csv):
+count_bin
+1         2566
+2         1556
+3-5       2387
+6-10      2572
+11-50     5046
+51-100    1258
+101+      1924
+
+    Saved: data/validation/missing_from_aisdb_vs_reference.csv
+    Saved: data/validation/plots/missing_from_aisdb_vs_reference_breakdown.png
+
+  original_nm4 vs reference_csv:
+    In original_nm4 but not reference_csv: 1,653
+    In reference_csv but not original_nm4: 503
+
+    MMSI type breakdown of missing vessels:
+      vessel                        :  1,492  (90.3%)
+      aid_to_navigation             :     84  (5.1%)
+      coast_guard_or_group          :     75  (4.5%)
+      auxiliary_craft               :      2  (0.1%)
+
+    Message count distribution (records in original_nm4):
+count_bin
+1         942
+2         252
+3-5       274
+6-10       91
+11-50      65
+51-100     13
+101+       16
+
+    Saved: data/validation/missing_from_reference_vs_original.csv
+    Saved: data/validation/plots/missing_from_reference_vs_original_breakdown.png
+
+======================================================================
+Validation complete. All outputs in data/validation/
+======================================================================

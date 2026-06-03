@@ -238,6 +238,34 @@ def plot_mmsi_overlap_heatmap(overlap_df, sources, out_path):
     plt.close()
 
 
+def classify_mmsi(mmsi):
+    """Classify an MMSI by its numeric prefix.
+
+    AIS spec:
+      00XXXXXXX (< 10,000,000 as int) — coast guard / ship group (leading zeros lost)
+      970XXXXXX                        — SAR aircraft / AIS-SART
+      972XXXXXX                        — man overboard device
+      974XXXXXX                        — EPIRB
+      98XXXXXXX (980–989M)             — auxiliary craft (attached to parent vessel)
+      99XXXXXXX (990–999M)             — aids to navigation
+      Otherwise                        — regular vessel (MID-based country code)
+    """
+    m = int(mmsi)
+    if m < 10_000_000:
+        return "coast_guard_or_group"
+    if 970_000_000 <= m <= 970_999_999:
+        return "SAR_aircraft"
+    if 972_000_000 <= m <= 972_999_999:
+        return "man_overboard"
+    if 974_000_000 <= m <= 974_999_999:
+        return "EPIRB"
+    if 980_000_000 <= m <= 989_999_999:
+        return "auxiliary_craft"
+    if 990_000_000 <= m <= 999_999_999:
+        return "aid_to_navigation"
+    return "vessel"
+
+
 def plot_temporal(temporal_df, out_path):
     fig, ax = plt.subplots(figsize=(12, 5))
     for name, grp in temporal_df.groupby("source"):
@@ -271,9 +299,10 @@ def main():
     }
 
     # Load all sources (store only what's needed for analysis)
-    mmsi_sets    = {}
-    temporal_dfs = []
+    mmsi_sets        = {}
+    temporal_dfs     = []
     top_vessel_counts = {}
+    mmsi_counts      = {}   # full per-MMSI record counts for missing-MMSI analysis
     # Store full dfs only for the key comparison pair (original_nm4 vs reference_csv)
     key_dfs = {}
 
@@ -285,8 +314,9 @@ def main():
         mmsi_sets[name] = set(df["mmsi"].unique())
         temporal_dfs.append(temporal_coverage(df, name))
 
-        # Top vessels by message count
-        top = df.groupby("mmsi").size().nlargest(20).reset_index(name="records")
+        counts = df.groupby("mmsi").size().reset_index(name="records")
+        mmsi_counts[name] = counts
+        top = counts.nlargest(20, "records").copy()
         top["source"] = name
         top_vessel_counts[name] = top
 
@@ -392,6 +422,73 @@ def main():
     top_df.to_csv(VAL_DIR / "top_vessels.csv", index=False)
     print(top_df.to_string(index=False))
     print(f"\nSaved: {VAL_DIR / 'top_vessels.csv'}")
+
+    # --- 6. Missing MMSI analysis -----------------------------------------
+    print("\n" + "=" * 70)
+    print("6. Missing MMSI analysis — what aisdb misses vs original + reference")
+    print("=" * 70)
+
+    pairs = [
+        ("original_nm4",  "aisdb_nm4",  "missing_from_aisdb_vs_original"),
+        ("reference_csv", "aisdb_nm4",  "missing_from_aisdb_vs_reference"),
+        ("original_nm4",  "reference_csv", "missing_from_reference_vs_original"),
+    ]
+
+    for src_a, src_b, label in pairs:
+        missing = mmsi_sets[src_a] - mmsi_sets[src_b]
+        extra   = mmsi_sets[src_b] - mmsi_sets[src_a]
+        print(f"\n  {src_a} vs {src_b}:")
+        print(f"    In {src_a} but not {src_b}: {len(missing):,}")
+        print(f"    In {src_b} but not {src_a}: {len(extra):,}")
+
+        if not missing:
+            continue
+
+        # Get record counts and classify missing MMSIs
+        counts_a = mmsi_counts[src_a].set_index("mmsi")["records"]
+        missing_df = pd.DataFrame({"mmsi": list(missing)})
+        missing_df["records_in_src"] = missing_df["mmsi"].map(counts_a).fillna(0).astype(int)
+        missing_df["mmsi_type"] = missing_df["mmsi"].apply(classify_mmsi)
+        missing_df = missing_df.sort_values("records_in_src", ascending=False)
+
+        # Type breakdown
+        type_counts = missing_df["mmsi_type"].value_counts()
+        print(f"\n    MMSI type breakdown of missing vessels:")
+        for mtype, cnt in type_counts.items():
+            pct = 100 * cnt / len(missing_df)
+            print(f"      {mtype:30s}: {cnt:6,}  ({pct:.1f}%)")
+
+        # Message count distribution
+        print(f"\n    Message count distribution (records in {src_a}):")
+        bins = [0, 1, 2, 5, 10, 50, 100, float("inf")]
+        labels = ["1","2","3-5","6-10","11-50","51-100","101+"]
+        missing_df["count_bin"] = pd.cut(missing_df["records_in_src"], bins=bins, labels=labels)
+        print(missing_df["count_bin"].value_counts().sort_index().to_string())
+
+        # Save
+        out = VAL_DIR / f"{label}.csv"
+        missing_df.to_csv(out, index=False)
+        print(f"\n    Saved: {out}")
+
+        # Bar chart — MMSI type breakdown
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+        type_counts.plot(kind="bar", ax=axes[0], color="steelblue", edgecolor="none")
+        axes[0].set_title(f"MMSI types missing from {src_b}\n(present in {src_a})", fontsize=9)
+        axes[0].set_xlabel(""); axes[0].set_ylabel("Count")
+        axes[0].tick_params(axis="x", labelsize=7, rotation=30)
+
+        missing_df["count_bin"].value_counts().sort_index().plot(
+            kind="bar", ax=axes[1], color="coral", edgecolor="none"
+        )
+        axes[1].set_title(f"Message count distribution\n(missing vessels, source={src_a})", fontsize=9)
+        axes[1].set_xlabel("Records in source"); axes[1].set_ylabel("Vessels")
+        axes[1].tick_params(axis="x", labelsize=8, rotation=0)
+
+        plt.tight_layout()
+        out_png = PLOTS_DIR / f"{label}_breakdown.png"
+        plt.savefig(out_png, dpi=150)
+        plt.close()
+        print(f"    Saved: {out_png}")
 
     print("\n" + "=" * 70)
     print("Validation complete. All outputs in data/validation/")

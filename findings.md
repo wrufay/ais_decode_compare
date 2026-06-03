@@ -45,3 +45,31 @@ Comparison run on two 3-hour UTC windows (00:00–03:00 and 21:00–24:00) of 20
 **Streaming vs NM4:** Both streaming sources show only ~3,000 unique vessels vs ~160,000+ from NM4, confirming that streaming is a heavily filtered/aggregated subset of the data, not an equivalent representation of the full day.
 
 Full results: `data/comparison_table.csv` | Plots: `data/plots/`
+
+## 5. Validation results
+
+Deep accuracy validation was run via `validate.py`, comparing all sources pairwise.
+
+**MMSI set overlap (Jaccard similarity):**
+
+| Pair | Jaccard | A covered by B | B covered by A |
+|---|---|---|---|
+| original_nm4 vs reference_csv | **0.989** | 99.18% | 99.75% |
+| original_nm4 vs aisdb_nm4 | 0.910 | 91.32% | 99.56% |
+| aisdb_nm4 vs reference_csv | 0.907 | 99.09% | 91.41% |
+
+**Coordinate agreement (original_nm4 vs reference_csv, 1000 vessel sample):**
+- Mean latitude error: < 0.001° for well-tracked vessels
+- Full distribution in `data/validation/coord_error_distribution.png`
+
+**Why aisdb misses ~17k vessels (original_nm4 vs aisdb_nm4 gap):**
+- 41% had only 1–2 messages — likely dropped by aisdb's deduplication primary key
+- 1,924 vessels with 100+ messages are also missing — worth investigating further
+- MMSI type breakdown in `data/validation/missing_from_aisdb_vs_original.csv`
+
+**Conclusion:**
+The original decoder has higher **recall** — it captures more vessels and matches the reference CSV at 99.18%. aisdb has higher **precision** — it rejects out-of-bounds coordinates and deduplicates multi-station receptions. Which is "better" depends on the use case.
+
+**Important caveat:** The reference CSV's decoding method is unknown. If it was produced by the same or similar decoder as the original script, the high match rate may reflect shared logic rather than independent ground truth.
+
+Full validation outputs: `data/validation/`
