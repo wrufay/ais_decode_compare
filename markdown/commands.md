@@ -85,7 +85,7 @@ PYTHONPATH=/home/fwu/Desktop/projects/ais_decode_compare:/home/fwu/Desktop/proje
 ## 6. Run the comparison
 
 ```bash
-.venv/bin/python -u compare.py
+.venv/bin/python -u analysis/compare.py
 # Output: data/comparison_table.csv
 #         data/plots/routes_00h-03h.png
 #         data/plots/routes_21h-24h.png
@@ -100,7 +100,7 @@ PYTHONPATH=/home/fwu/Desktop/projects/ais_decode_compare:/home/fwu/Desktop/proje
 ## 7. Run the validation
 
 ```bash
-.venv/bin/python -u validate.py
+.venv/bin/python -u analysis/validate.py
 # Output: data/validation/mmsi_overlap.csv
 #         data/validation/coord_agreement.csv
 #         data/validation/temporal_coverage.csv

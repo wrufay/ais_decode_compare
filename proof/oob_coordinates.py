@@ -52,8 +52,10 @@ Must be run from the repo root directory.
 
 import netCDF4
 import numpy as np
+from pathlib import Path
 
-NC_PATH = "data/original/streaming/Dynamic_CCG_AIS_UTC_Log_2025-12-30.nc"
+REPO_ROOT = Path(__file__).parent.parent
+NC_PATH = str(REPO_ROOT / "data/original/streaming/Dynamic_CCG_AIS_UTC_Log_2025-12-30.nc")
 
 ds = netCDF4.Dataset(NC_PATH)
 mmsi = np.array(ds.variables["mmsi"][:], dtype=np.int64)

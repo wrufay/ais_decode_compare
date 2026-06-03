@@ -83,7 +83,7 @@ OUTPUT
 
 USAGE
 -----
-    .venv/bin/python -u compare.py
+    .venv/bin/python -u analysis/compare.py
 
 The -u flag forces unbuffered output so progress prints immediately.
 Runtime: ~7 minutes.
@@ -109,7 +109,8 @@ WINDOWS = {
     "21h-24h": (1767128400, 1767139200),  # 21:00–24:00 UTC
 }
 
-DATA_DIR    = Path("data")
+REPO_ROOT   = Path(__file__).parent.parent  # works from any working directory
+DATA_DIR    = REPO_ROOT / "data"
 PLOTS_DIR   = DATA_DIR / "plots"
 REF_CSV_DIR = Path("/home/shared/ccg_ais_claudio/ais_comp/csv")
 
@@ -333,10 +334,10 @@ def main():
     print("=" * 70)
 
     loaders = {
-        "original_nm4":       (load_original_nc, "data/original/nm4/Dynamic_*.nc"),
-        "original_streaming": (load_original_nc, "data/original/streaming/Dynamic_*.nc"),
-        "aisdb_nm4":          (load_aisdb,        "data/decode_nm4.db"),
-        "aisdb_streaming":    (load_aisdb,         "data/decode_streaming.db"),
+        "original_nm4":       (load_original_nc, str(DATA_DIR / "original/nm4/Dynamic_*.nc")),
+        "original_streaming": (load_original_nc, str(DATA_DIR / "original/streaming/Dynamic_*.nc")),
+        "aisdb_nm4":          (load_aisdb,        str(DATA_DIR / "decode_nm4.db")),
+        "aisdb_streaming":    (load_aisdb,         str(DATA_DIR / "decode_streaming.db")),
         "reference_csv":      (load_reference_csv, str(REF_CSV_DIR)),
     }
 

@@ -96,7 +96,7 @@ OUTPUT
 
 USAGE
 -----
-    .venv/bin/python -u validate.py
+    .venv/bin/python -u analysis/validate.py
 
 The -u flag forces unbuffered output so progress prints immediately.
 Runtime: ~15 minutes.
@@ -122,9 +122,10 @@ WINDOWS = {
     "21h-24h": (1767128400, 1767139200),
 }
 
-DATA_DIR   = Path("data")
-VAL_DIR    = DATA_DIR / "validation"
-PLOTS_DIR  = VAL_DIR / "plots"
+REPO_ROOT   = Path(__file__).parent.parent  # works from any working directory
+DATA_DIR    = REPO_ROOT / "data"
+VAL_DIR     = DATA_DIR / "validation"
+PLOTS_DIR   = VAL_DIR / "plots"
 REF_CSV_DIR = Path("/home/shared/ccg_ais_claudio/ais_comp/csv")
 
 VAL_DIR.mkdir(parents=True, exist_ok=True)
@@ -383,10 +384,10 @@ def main():
     print("=" * 70)
 
     source_defs = {
-        "original_nm4":       (load_original_nc, "data/original/nm4/Dynamic_*.nc"),
-        "original_streaming": (load_original_nc, "data/original/streaming/Dynamic_*.nc"),
-        "aisdb_nm4":          (load_aisdb,        "data/decode_nm4.db"),
-        "aisdb_streaming":    (load_aisdb,         "data/decode_streaming.db"),
+        "original_nm4":       (load_original_nc, str(DATA_DIR / "original/nm4/Dynamic_*.nc")),
+        "original_streaming": (load_original_nc, str(DATA_DIR / "original/streaming/Dynamic_*.nc")),
+        "aisdb_nm4":          (load_aisdb,        str(DATA_DIR / "decode_nm4.db")),
+        "aisdb_streaming":    (load_aisdb,         str(DATA_DIR / "decode_streaming.db")),
         "reference_csv":      (load_reference_csv, str(REF_CSV_DIR)),
     }
 
