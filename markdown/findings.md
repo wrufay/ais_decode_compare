@@ -87,3 +87,36 @@ The original decoder has higher **recall** — it captures more vessels and matc
 **Important caveat:** The reference CSV's decoding method is unknown. If it was produced by the same or similar decoder as the original script, the high match rate may reflect shared logic rather than independent ground truth.
 
 Full validation outputs: `data/validation/`
+
+## 6. Performance profiling — aisdb vs original decoder
+
+Tested on 3 NM4 files (~1.44M raw messages, 146.7 MB extracted). Script: `profile_aisdb.py`. Full output: `data/profile_output.log`.
+
+| Method | Time | Rate |
+|---|---|---|
+| aisdb → `:memory:` (parse + RAM write) | 5.45s | ~264,000 msgs/s |
+| aisdb → SQLite (parse + disk write) | 29.37s | 40,101 rows/s |
+| original decoder → NetCDF (parse + disk write) | 59.73s | 24,747 rows/s |
+
+**Which comparisons are valid:**
+
+| Comparison | Fair? | Finding |
+|---|---|---|
+| aisdb SQLite vs original NetCDF (end-to-end) | ✅ | aisdb is 2x faster end-to-end |
+| aisdb :memory: vs aisdb SQLite | ✅ | SQLite writes = 81% of aisdb time |
+| aisdb :memory: vs original NetCDF | ❌ | Not comparable — aisdb skips disk, original doesn't |
+| aisdb pure parse vs original pure parse | ❌ | Can't isolate — original always writes, no way to skip |
+
+**What we can conclude:**
+- aisdb is **2x faster end-to-end** than the original serial decoder (29s vs 60s on 3 files)
+- SQLite writes consume **81%** of aisdb's total time — the parser is not the bottleneck
+- aisdb's pure decoding speed is fast (~264,000 msgs/s) but cannot be directly compared to the original decoder's parse speed since the original always writes to NetCDF
+- The 5.5-hour NM4 decode was slow because SQLite scales poorly to 17GB — the rate dropped from 76k msgs/s on file 1 to 43k msgs/s by file 3 as the DB grew
+
+**Note on :memory: rows showing 0:**
+aisdb spawns 4 worker processes internally. Each worker gets its own separate `:memory:` connection — writes don't appear in the main connection. The timing is real but row count cannot be queried this way.
+
+**What we cannot conclude yet:**
+- Original decoder parallel version (`Process_AIS_Parallel.py` with Ray) was not tested — supervisor says ~2 minutes on cluster
+- aisdb with PostgreSQL was not tested — would likely be significantly faster than SQLite
+- These are the recommended next experiments for a fair production comparison

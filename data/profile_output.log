@@ -1,0 +1,61 @@
+Profiling aisdb on 3 NM4 file(s)
+============================================================
+Phase 1 — ZIP extraction:      0.36s  (146.7 MB extracted)
+
+Phase 2a — decode to :memory: (no disk writes)...
+generating file checksums...
+checking file dates...
+creating tables and dropping table indexes...
+Memory: 11.61GB remaining.  CPUs: 72.  Average file size: 97.78MB  Spawning 4 workers
+processing /tmp/claude-1003/tmpt5xexwhu/ais-2025-12-30-00-00.nmea
+ais-2025-12-30-00-00.nmea                                        count:  491646    elapsed:    1.75s    rate:   280876 msgs/s
+processing /tmp/claude-1003/tmpt5xexwhu/ais-2025-12-30-00-05.nmea
+ais-2025-12-30-00-05.nmea                                        count:  468370    elapsed:    1.57s    rate:   297758 msgs/s
+processing /tmp/claude-1003/tmpt5xexwhu/ais-2025-12-30-00-10.nmea
+ais-2025-12-30-00-10.nmea                                        count:  479787    elapsed:    1.62s    rate:   296074 msgs/s
+saving checksums...
+cleaning temporary data...
+  Time:        5.55s
+  Rows:        0
+  Rate:        0 rows/s
+
+Phase 2b — decode to disk SQLite (parsing + writes)...
+generating file checksums...
+checking file dates...
+creating tables and dropping table indexes...
+Memory: 11.38GB remaining.  CPUs: 72.  Average file size: 97.78MB  Spawning 4 workers
+processing /tmp/claude-1003/tmpt5xexwhu/ais-2025-12-30-00-00.nmea
+ais-2025-12-30-00-00.nmea                                        count:  491646    elapsed:    6.71s    rate:    73282 msgs/s
+processing /tmp/claude-1003/tmpt5xexwhu/ais-2025-12-30-00-05.nmea
+ais-2025-12-30-00-05.nmea                                        count:  468370    elapsed:    9.36s    rate:    50033 msgs/s
+processing /tmp/claude-1003/tmpt5xexwhu/ais-2025-12-30-00-10.nmea
+ais-2025-12-30-00-10.nmea                                        count:  479787    elapsed:   11.23s    rate:    42734 msgs/s
+saving checksums...
+cleaning temporary data...
+aggregating static reports into static_202512_aggregate...
+  Time:        29.70s
+  Rows:        1,177,961
+  Rate:        39,665 rows/s
+  DB size:     178.2 MB
+
+Phase 3 — original decoder (serial, parsing + NetCDF write)...
+  Time:        60.78s
+  NC files:    3 Dynamic + 3 Static
+  Rows:        1,478,148
+  Rate:        24,318 rows/s
+
+============================================================
+FINAL COMPARISON — same 3 NM4 files, same raw data
+============================================================
+
+Method                                  Time          Rows      Msgs/s
+----------------------------------------------------------------------
+ZIP extraction                         0.36s             —           —
+aisdb → :memory: (parse only)          5.55s             0     259,240
+aisdb → SQLite (parse + write)        29.70s     1,177,961      39,665
+original decoder → NetCDF             60.78s     1,478,148      24,318
+
+Key findings:
+  aisdb SQLite is 5.3x slower than aisdb :memory: → SQLite writes = 81% of aisdb time
+  aisdb :memory: is 0.1x faster/slower than original decoder (parse speed)
+  aisdb SQLite vs original NetCDF: 29.7s vs 60.8s (0.5x ratio)

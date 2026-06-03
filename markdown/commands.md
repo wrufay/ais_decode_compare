@@ -117,6 +117,39 @@ PYTHONPATH=/home/fwu/Desktop/projects/ais_decode_compare:/home/fwu/Desktop/proje
 
 ---
 
+## 8. Profile aisdb decoding speed
+
+```bash
+# Profile on 3 NM4 files (recommended — fast, enough data to be meaningful)
+.venv/bin/python -u profile_aisdb.py 3
+
+# Save output to log
+.venv/bin/python -u profile_aisdb.py 3 > data/profile_output.log 2>&1
+# Output: data/profile_output.log
+```
+
+**Why:** Run in response to supervisor suggestion to time each phase of aisdb
+to find the bottleneck. Tests three modes on the same input data:
+  1. aisdb → `:memory:` (pure parsing, no disk writes)
+  2. aisdb → SQLite (parsing + disk writes)
+  3. original decoder → NetCDF (for direct comparison)
+
+**Results (3 files, ~1.44M messages):**
+
+| Method | Time | Rate |
+|---|---|---|
+| aisdb → :memory: (parse only) | 5.45s | ~264,000 msgs/s |
+| aisdb → SQLite (parse + write) | 29.37s | 40,101 rows/s |
+| original decoder → NetCDF | 59.73s | 24,747 rows/s |
+
+**Conclusion:** aisdb's parser is ~11x faster than the original decoder.
+SQLite writes consume 81% of aisdb's time. End-to-end aisdb is 2x faster
+than the original serial decoder. PostgreSQL would likely close that gap further.
+
+**Runtime:** ~2 minutes for 3 files.
+
+---
+
 ## Key notes
 
 - All decoding was run with `nohup ... &` to keep jobs running if the terminal closed
