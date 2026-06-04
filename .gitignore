@@ -8,6 +8,9 @@ data/decode_nm4.db-journal
 data/decode_streaming.db
 data/decode_streaming.db-journal
 
+# Plot cache — regenerate with extract.py
+data/plot_cache.npz
+
 # Keep results
 !data/comparison_table.csv
 !data/comparison_table_backup.csv

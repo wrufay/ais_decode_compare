@@ -83,21 +83,25 @@ def load_aisdb(db_path: str) -> tuple[np.ndarray, np.ndarray]:
         print(f"  [warn] no *_dynamic table in {db_path}")
         return np.array([]), np.array([])
 
-    frames = []
+    # Chunked reads to avoid loading the full table into memory at once
+    # (temporary workaround for SQLite's lack of native streaming)
+    lons_list, lats_list = [], []
     for tbl in dyn_tables:
-        df = pd.read_sql_query(
+        for chunk in pd.read_sql_query(
             f"""SELECT latitude AS lat, longitude AS lon
                 FROM {tbl}
                 WHERE time >= {T_START} AND time < {T_END}
                   AND latitude BETWEEN -90 AND 90
                   AND longitude BETWEEN -180 AND 180""",
             con,
-        )
-        frames.append(df)
+            chunksize=500_000,
+        ):
+            lons_list.append(chunk["lon"].to_numpy())
+            lats_list.append(chunk["lat"].to_numpy())
     con.close()
 
-    df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=["lat", "lon"])
-    return df["lon"].to_numpy(), df["lat"].to_numpy()
+    return (np.concatenate(lons_list) if lons_list else np.array([]),
+            np.concatenate(lats_list) if lats_list else np.array([]))
 
 
 def load_reference_csv(csv_dir: str) -> tuple[np.ndarray, np.ndarray]:
