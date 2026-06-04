@@ -14,7 +14,7 @@
 | Original decoder vs reference CSV | 99.2% MMSI overlap (Jaccard 0.989) — very high agreement |
 | aisdb vs reference CSV | 91.4% MMSI overlap (Jaccard 0.907) — missing 17,309 vessels |
 | Coordinate accuracy | Near-zero mean error between original decoder and reference CSV |
-| End-to-end speed (3 files) | aisdb SQLite: 29.7s vs original NetCDF: 60.8s — aisdb 2× faster |
+| End-to-end speed | 3-file test: aisdb 2× faster. Full 288-file run: aisdb 2.75× slower — SQLite degrades at scale |
 | aisdb bottleneck | SQLite writes account for 81% of aisdb total decode time |
 
 ---
@@ -200,13 +200,13 @@ Conducted at supervisor's suggestion to identify the performance bottleneck in a
 
 | Comparison | Valid | Result |
 |---|---|---|
-| aisdb SQLite vs original decoder NetCDF | ✅ | aisdb is **2.0× faster** end-to-end |
+| aisdb SQLite vs original decoder NetCDF | ✅ (small scale only) | aisdb is 2× faster on 3 files, but **2.75× slower** on full 288-file run — SQLite degrades as DB grows |
 | aisdb `:memory:` vs aisdb SQLite | ✅ | SQLite writes = **81%** of aisdb total time |
 | aisdb `:memory:` vs original decoder NetCDF | ❌ | Not comparable — different operations |
 | aisdb pure parse speed vs original pure parse speed | ❌ | Cannot isolate — original decoder always writes |
 
 **Conclusions:**
-- aisdb is **2× faster end-to-end** than the original serial decoder on the same data
+- aisdb is **2× faster end-to-end** than the original serial decoder on small data (3 files, fresh DB), but was **2.75× slower** on the full 288-file run (~2 hours vs ~5.5 hours) — SQLite performance degrades significantly as the database grows to 17GB
 - **SQLite writes account for 81%** of aisdb's total decode time — the NMEA parser is not the bottleneck
 - The 5.5-hour full NM4 decode was slow because SQLite degrades as the database grows — decode rate fell from ~76,000 msgs/s on the first file to ~43,000 msgs/s by the third file
 - aisdb's parser speed is fast (>259,000 msgs/s) but cannot be directly compared to the original decoder's parse speed, since the original decoder always writes to disk
