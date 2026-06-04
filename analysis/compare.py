@@ -105,8 +105,13 @@ import pandas as pd
 # Time windows — two 3-hour slices of 2025-12-30 UTC
 # ---------------------------------------------------------------------------
 WINDOWS = {
-    "00h-03h": (1767052800, 1767063600),  # 00:00–03:00 UTC
-    "21h-24h": (1767128400, 1767139200),  # 21:00–24:00 UTC
+    # 00:00–03:00 UTC
+    # "00h-03h": (1767052800, 1767063600),
+    # 21:00–24:00 UTC  
+    # "21h-24h": (1767128400, 1767139200),
+    # For generating a full 24 hour plot, use the entire day as the window
+
+    "00h-24h": (1767052800, 1767139200)  
 }
 
 REPO_ROOT   = Path(__file__).parent.parent  # works from any working directory
