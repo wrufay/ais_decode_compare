@@ -55,11 +55,22 @@ def make_plot(cache: np.lib.npyio.NpzFile, bounds: dict | None, out_png: Path) -
     print(f"Saved: {out_png}")
 
 
+def print_scotian_counts(cache: np.lib.npyio.NpzFile) -> None:
+    print("\nScotian Shelf point counts (lon −68 to −55, lat 42 to 48):")
+    for src_name in SOURCES:
+        lons = cache[f"{src_name}_lons"]
+        lats = cache[f"{src_name}_lats"]
+        mask = (
+            (lons >= BBOX["lon_min"]) & (lons <= BBOX["lon_max"]) &
+            (lats >= BBOX["lat_min"]) & (lats <= BBOX["lat_max"])
+        )
+        print(f"  {src_name}: {mask.sum():,} pts")
+
+
 def main():
     cache = np.load(CACHE_PATH)
 
-    make_plot(cache, bounds=None, out_png=PLOTS_DIR / "routes_00h-24h_global.png")
-    make_plot(cache, bounds=BBOX,  out_png=PLOTS_DIR / "routes_00h-24h_scotian.png")
+    print_scotian_counts(cache)
 
 
 if __name__ == "__main__":
