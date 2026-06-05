@@ -19,7 +19,7 @@ using approximate bounds of lon: −68 to −55, lat: 42 to 48.
 |---|---|---|
 | original_nm4 | 143,373,481 | 249,162 |
 | original_streaming | 22,099,289 | 2,727,398 |
-| aisdb_nm4 | 120,833,622 | 231,387 |
-| aisdb_streaming | 7,247,847 | 1,280,816 |
+| aisdb_nm4 | 120,833,622 *(−16% vs original_nm4)* | 231,387 *(−7% vs original_nm4)* |
+| aisdb_streaming | 7,247,847 *(−67% vs original_streaming)* | 1,280,816 *(−53% vs original_streaming)* |
 | reference_csv | 130,513,435 | 251,506 |
 
