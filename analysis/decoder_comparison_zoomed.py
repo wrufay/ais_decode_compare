@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-decoder_comparison_plot.py — Lat / lon vs time for a single vessel, comparing
-                              the two NM4 decoders against the reference CSV.
+decoder_comparison_zoomed.py — Same as decoder_comparison_plot.py but zoomed
+                                into a 3-hour window so individual points are
+                                visible.
 
-MMSI:    352001367  (highest obs count + spread among common Scotian Shelf vessels)
-Sources: original_nm4, aisdb_nm4, reference_csv
+Produces:
+  data/plots/decoder_comparison_nm4_zoomed.png
+  data/plots/decoder_comparison_streaming_zoomed.png
 
 Usage:
-    .venv/bin/python -u analysis/decoder_comparison_plot.py
+    .venv/bin/python -u analysis/decoder_comparison_zoomed.py
 """
 
 import glob
@@ -19,20 +21,14 @@ import matplotlib.dates as mdates
 import matplotlib.pyplot as plt
 import pandas as pd
 
-T_START = 1767052800  # 2025-12-30 00:00 UTC
-T_END   = 1767139200  # 2025-12-30 24:00 UTC
+# 30-minute window: 06:00 – 06:30 UTC on 2025-12-30
+T_START = 1767052800 + 6 * 3600          # 06:00
+T_END   = 1767052800 + 6 * 3600 + 1800   # 06:30
 MMSI    = 352001367
 
 REPO_ROOT   = Path(__file__).parent.parent
 DATA_DIR    = REPO_ROOT / "data"
 PLOTS_DIR   = DATA_DIR / "plots"
-REF_CSV_DIR = Path("/home/shared/ccg_ais_claudio/ais_comp/csv")
-
-SOURCES = {
-    "original_nm4": {"color": "steelblue",   "lw": 1.2, "ls": "-",  "zorder": 2},
-    "aisdb_nm4":    {"color": "darkorange",  "lw": 1.2, "ls": "-",  "zorder": 2},
-    "reference":    {"color": "black",       "lw": 0.8, "ls": "--", "zorder": 1},
-}
 
 
 def load_nc(pattern: str) -> pd.DataFrame:
@@ -43,7 +39,7 @@ def load_nc(pattern: str) -> pd.DataFrame:
     chunks = []
     for path in files:
         ds = netCDF4.Dataset(path)
-        mmsi = np.array(ds.variables["mmsi"][:],    dtype=np.int64)
+        mmsi = np.array(ds.variables["mmsi"][:],     dtype=np.int64)
         ts   = np.array(ds.variables["date_num"][:], dtype=np.int64)
         lat  = np.array(ds.variables["latitude"][:], dtype=float)
         lon  = np.array(ds.variables["longitude"][:], dtype=float)
@@ -72,44 +68,22 @@ def load_aisdb(db_path: str) -> pd.DataFrame:
     return df.sort_values("ts")
 
 
-def load_reference(csv_dir: str) -> pd.DataFrame:
-    zips = sorted(glob.glob(f"{csv_dir}/*.csv.zip"))
-    chunks = []
-    for zip_path in zips:
-        with zipfile.ZipFile(zip_path) as zf:
-            for name in zf.namelist():
-                with zf.open(name) as f:
-                    df = pd.read_csv(f, usecols=["mmsi", "latitude", "longitude", "reception_timestamp"])
-                df = df[df["mmsi"] == MMSI].copy()
-                if df.empty:
-                    continue
-                df["ts"] = (
-                    (pd.to_datetime(df["reception_timestamp"]) - pd.Timestamp("1970-01-01"))
-                    // pd.Timedelta("1s")
-                )
-                df = df[(df["ts"] >= T_START) & (df["ts"] < T_END)]
-                chunks.append(df[["ts", "latitude", "longitude"]].rename(
-                    columns={"latitude": "lat", "longitude": "lon"}
-                ))
-    return pd.concat(chunks, ignore_index=True).sort_values("ts") if chunks else pd.DataFrame(columns=["ts", "lat", "lon"])
-
-
 def make_plot(decoders: list, source: str) -> None:
     def to_dt(ts): return pd.to_datetime(ts, unit="s", utc=True)
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 6), constrained_layout=True, sharex=True)
-    fig.suptitle(f"MMSI {MMSI} — {source} source — decoder comparison (2025-12-30 UTC)", fontsize=12)
+    fig.suptitle(f"MMSI {MMSI} — {source} — 06:00–06:30 UTC (2025-12-30)", fontsize=12)
 
     fmt = mdates.DateFormatter("%H:%M")
-    loc = mdates.HourLocator(interval=3)
+    loc = mdates.MinuteLocator(interval=5)
     colors = ["steelblue", "darkorange"]
 
     for col, (label, df) in enumerate(decoders):
         ax_lat = axes[0, col]
         ax_lon = axes[1, col]
         t = to_dt(df["ts"])
-        ax_lat.scatter(t, df["lat"], s=1, color=colors[col], alpha=0.5, linewidths=0)
-        ax_lon.scatter(t, df["lon"], s=1, color=colors[col], alpha=0.5, linewidths=0)
+        ax_lat.scatter(t, df["lat"], s=4, color=colors[col], alpha=0.6, linewidths=0)
+        ax_lon.scatter(t, df["lon"], s=4, color=colors[col], alpha=0.6, linewidths=0)
         ax_lat.set_title(f"{label}\n({len(df):,} pts)", fontsize=10)
         ax_lon.xaxis.set_major_formatter(fmt)
         ax_lon.xaxis.set_major_locator(loc)
@@ -124,7 +98,7 @@ def make_plot(decoders: list, source: str) -> None:
     axes[1, 1].set_xlabel("Time (UTC)", fontsize=10)
 
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
-    out = PLOTS_DIR / f"decoder_comparison_{source}.png"
+    out = PLOTS_DIR / f"decoder_comparison_{source}_zoomed.png"
     plt.savefig(out, dpi=150)
     plt.close()
     print(f"Saved: {out}")
