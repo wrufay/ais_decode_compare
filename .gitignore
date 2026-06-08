@@ -7,6 +7,7 @@ data/decode_nm4.db
 data/decode_nm4.db-journal
 data/decode_streaming.db
 data/decode_streaming.db-journal
+data/aisdb/
 
 # Plot cache — regenerate with extract.py
 data/plot_cache.npz
