@@ -71,12 +71,11 @@ def load_aisdb(db_path: str) -> pd.DataFrame:
 def make_plot(decoders: list, source: str) -> None:
     def to_dt(ts): return pd.to_datetime(ts, unit="s", utc=True)
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 6), constrained_layout=True, sharex=True)
+    fig, axes = plt.subplots(2, len(decoders), figsize=(7 * len(decoders), 6), constrained_layout=True, sharex=True)
     fig.suptitle(f"MMSI {MMSI} — {source} — 06:00–06:30 UTC (2025-12-30)", fontsize=12)
 
     fmt = mdates.DateFormatter("%H:%M")
-    loc = mdates.MinuteLocator(interval=5)
-    colors = ["steelblue", "darkorange"]
+    colors = ["steelblue", "darkorange", "green"]
 
     for col, (label, df) in enumerate(decoders):
         ax_lat = axes[0, col]
@@ -86,7 +85,6 @@ def make_plot(decoders: list, source: str) -> None:
         ax_lon.scatter(t, df["lon"], s=4, color=colors[col], alpha=0.6, linewidths=0)
         ax_lat.set_title(f"{label}\n({len(df):,} pts)", fontsize=10)
         ax_lon.xaxis.set_major_formatter(fmt)
-        ax_lon.xaxis.set_major_locator(loc)
         plt.setp(ax_lon.xaxis.get_majorticklabels(), rotation=30, ha="right")
         for ax in (ax_lat, ax_lon):
             ax.grid(True, alpha=0.3)
@@ -94,11 +92,63 @@ def make_plot(decoders: list, source: str) -> None:
 
     axes[0, 0].set_ylabel("Latitude (°N)", fontsize=10)
     axes[1, 0].set_ylabel("Longitude (°E)", fontsize=10)
-    axes[1, 0].set_xlabel("Time (UTC)", fontsize=10)
-    axes[1, 1].set_xlabel("Time (UTC)", fontsize=10)
+    for ax in axes[1]:
+        ax.set_xlabel("Time (UTC)", fontsize=10)
 
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
     out = PLOTS_DIR / f"decoder_comparison_{source}_zoomed.png"
+    plt.savefig(out, dpi=150)
+    plt.close()
+    print(f"Saved: {out}")
+
+
+def load_reference(csv_dir: str) -> pd.DataFrame:
+    import zipfile, glob
+    zips = sorted(glob.glob(f"{csv_dir}/*.csv.zip"))
+    chunks = []
+    for zip_path in zips:
+        with zipfile.ZipFile(zip_path) as zf:
+            for name in zf.namelist():
+                with zf.open(name) as f:
+                    df = pd.read_csv(f, usecols=["mmsi", "latitude", "longitude", "reception_timestamp"])
+                df = df[df["mmsi"] == MMSI].copy()
+                if df.empty:
+                    continue
+                df["ts"] = (
+                    (pd.to_datetime(df["reception_timestamp"]) - pd.Timestamp("1970-01-01"))
+                    // pd.Timedelta("1s")
+                )
+                df = df[(df["ts"] >= T_START) & (df["ts"] < T_END)]
+                chunks.append(df[["ts", "latitude", "longitude"]].rename(
+                    columns={"latitude": "lat", "longitude": "lon"}
+                ))
+    return pd.concat(chunks, ignore_index=True).sort_values("ts") if chunks else pd.DataFrame(columns=["ts", "lat", "lon"])
+
+
+def make_reference_plot(df: pd.DataFrame) -> None:
+    def to_dt(ts): return pd.to_datetime(ts, unit="s", utc=True)
+
+    fig, (ax_lat, ax_lon) = plt.subplots(2, 1, figsize=(10, 6), constrained_layout=True, sharex=True)
+    fig.suptitle(f"MMSI {MMSI} — reference CSV — 06:00–06:30 UTC (2025-12-30)", fontsize=12)
+
+    t = to_dt(df["ts"])
+    ax_lat.scatter(t, df["lat"], s=4, color="green", alpha=0.6, linewidths=0)
+    ax_lon.scatter(t, df["lon"], s=4, color="green", alpha=0.6, linewidths=0)
+    ax_lat.set_title(f"reference\n({len(df):,} pts)", fontsize=10)
+
+    fmt = mdates.DateFormatter("%H:%M")
+    ax_lon.xaxis.set_major_formatter(fmt)
+    plt.setp(ax_lon.xaxis.get_majorticklabels(), rotation=30, ha="right")
+
+    ax_lat.set_ylabel("Latitude (°N)", fontsize=10)
+    ax_lon.set_ylabel("Longitude (°E)", fontsize=10)
+    ax_lon.set_xlabel("Time (UTC)", fontsize=10)
+    for ax in (ax_lat, ax_lon):
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(labelsize=8)
+
+    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+    out = PLOTS_DIR / "decoder_comparison_reference_zoomed.png"
     plt.savefig(out, dpi=150)
     plt.close()
     print(f"Saved: {out}")
@@ -115,8 +165,12 @@ def main():
     aisdb_stream = load_aisdb(str(DATA_DIR / "aisdb/decode_streaming.db"))
     print(f"  original_streaming: {len(orig_stream):,}  aisdb_streaming: {len(aisdb_stream):,}")
 
-    make_plot([("original_nm4", orig_nm4), ("aisdb_nm4", aisdb_nm4)], "nm4")
-    make_plot([("original_streaming", orig_stream), ("aisdb_streaming", aisdb_stream)], "streaming")
+    print("Loading reference...")
+    ref = load_reference(str(Path("/home/shared/ccg_ais_claudio/ais_comp/csv")))
+    print(f"  reference: {len(ref):,}")
+
+    make_plot([("original_nm4", orig_nm4), ("aisdb_nm4", aisdb_nm4), ("reference", ref)], "nm4")
+    make_plot([("original_streaming", orig_stream), ("aisdb_streaming", aisdb_stream), ("reference", ref)], "streaming")
 
 
 if __name__ == "__main__":

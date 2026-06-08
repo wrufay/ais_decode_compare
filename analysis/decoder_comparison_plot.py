@@ -97,12 +97,12 @@ def load_reference(csv_dir: str) -> pd.DataFrame:
 def make_plot(decoders: list, source: str) -> None:
     def to_dt(ts): return pd.to_datetime(ts, unit="s", utc=True)
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 6), constrained_layout=True, sharex=True)
+    fig, axes = plt.subplots(2, len(decoders), figsize=(7 * len(decoders), 6), constrained_layout=True, sharex=True)
     fig.suptitle(f"MMSI {MMSI} — {source} source — decoder comparison (2025-12-30 UTC)", fontsize=12)
 
     fmt = mdates.DateFormatter("%H:%M")
     loc = mdates.HourLocator(interval=3)
-    colors = ["steelblue", "darkorange"]
+    colors = ["steelblue", "darkorange", "green"]
 
     for col, (label, df) in enumerate(decoders):
         ax_lat = axes[0, col]
@@ -120,11 +120,42 @@ def make_plot(decoders: list, source: str) -> None:
 
     axes[0, 0].set_ylabel("Latitude (°N)", fontsize=10)
     axes[1, 0].set_ylabel("Longitude (°E)", fontsize=10)
-    axes[1, 0].set_xlabel("Time (UTC)", fontsize=10)
-    axes[1, 1].set_xlabel("Time (UTC)", fontsize=10)
+    for ax in axes[1]:
+        ax.set_xlabel("Time (UTC)", fontsize=10)
 
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
     out = PLOTS_DIR / f"decoder_comparison_{source}.png"
+    plt.savefig(out, dpi=150)
+    plt.close()
+    print(f"Saved: {out}")
+
+
+def make_reference_plot(df: pd.DataFrame, suffix: str = "") -> None:
+    def to_dt(ts): return pd.to_datetime(ts, unit="s", utc=True)
+
+    fig, (ax_lat, ax_lon) = plt.subplots(2, 1, figsize=(10, 6), constrained_layout=True, sharex=True)
+    fig.suptitle(f"MMSI {MMSI} — reference CSV (2025-12-30 UTC)", fontsize=12)
+
+    t = to_dt(df["ts"])
+    ax_lat.scatter(t, df["lat"], s=1, color="green", alpha=0.5, linewidths=0)
+    ax_lon.scatter(t, df["lon"], s=1, color="green", alpha=0.5, linewidths=0)
+    ax_lat.set_title(f"reference\n({len(df):,} pts)", fontsize=10)
+
+    fmt = mdates.DateFormatter("%H:%M")
+    loc = mdates.HourLocator(interval=3)
+    ax_lon.xaxis.set_major_formatter(fmt)
+    ax_lon.xaxis.set_major_locator(loc)
+    plt.setp(ax_lon.xaxis.get_majorticklabels(), rotation=30, ha="right")
+
+    ax_lat.set_ylabel("Latitude (°N)", fontsize=10)
+    ax_lon.set_ylabel("Longitude (°E)", fontsize=10)
+    ax_lon.set_xlabel("Time (UTC)", fontsize=10)
+    for ax in (ax_lat, ax_lon):
+        ax.grid(True, alpha=0.3)
+        ax.tick_params(labelsize=8)
+
+    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+    out = PLOTS_DIR / f"decoder_comparison_reference{suffix}.png"
     plt.savefig(out, dpi=150)
     plt.close()
     print(f"Saved: {out}")
@@ -141,8 +172,12 @@ def main():
     aisdb_stream = load_aisdb(str(DATA_DIR / "aisdb/decode_streaming.db"))
     print(f"  original_streaming: {len(orig_stream):,}  aisdb_streaming: {len(aisdb_stream):,}")
 
-    make_plot([("original_nm4", orig_nm4), ("aisdb_nm4", aisdb_nm4)], "nm4")
-    make_plot([("original_streaming", orig_stream), ("aisdb_streaming", aisdb_stream)], "streaming")
+    print("Loading reference...")
+    ref = load_reference(str(REF_CSV_DIR))
+    print(f"  reference: {len(ref):,}")
+
+    make_plot([("original_nm4", orig_nm4), ("aisdb_nm4", aisdb_nm4), ("reference", ref)], "nm4")
+    make_plot([("original_streaming", orig_stream), ("aisdb_streaming", aisdb_stream), ("reference", ref)], "streaming")
 
 
 if __name__ == "__main__":

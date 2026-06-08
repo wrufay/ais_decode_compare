@@ -19,3 +19,23 @@
 
 ### Streaming
 ![Lat and long as functions of time](../data/plots/decoder_comparison_streaming_zoomed.png)
+
+
+---
+
+### Other notes and observations
+
+<details>
+<summary>Output file sizes</summary>
+
+**AISdb**
+- Streaming: 1.05GB
+- NM4: 16.99GB
+
+One .db file for each decoded output using the AISdb script. Dynamic and static data have separate tables inside each .db file.
+
+**Original**
+- Streaming: 3.74GB (dynamic) + 452MB (static) = 4.19GB
+- NM4: 27.5GB
+
+</details>
