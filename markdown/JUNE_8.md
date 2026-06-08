@@ -36,6 +36,6 @@ One .db file for each decoded output using the AISdb script. Dynamic and static 
 
 **Original**
 - Streaming: 3.74GB (dynamic) + 452MB (static) = 4.19GB
-- NM4: 27.5GB
+- NM4: 27.5GB .
 
 </details>
